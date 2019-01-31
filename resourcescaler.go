@@ -83,7 +83,7 @@ func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scaling int
 		// update service selector to refer to dlx
 		s.logger.InfoWith("Changing service's selector to work with dlx", "service_name", string(resource))
 
-		service.Spec.Selector = map[string]string{"app": "scaler-dlx"}
+		service.Spec.Selector = map[string]string{"app": "scaler", "component": "dlx"}
 		_, err := s.kubeClientSet.CoreV1().Services(s.namespace).Update(service)
 		if err != nil {
 			s.logger.WarnWith("Failure during update of service with selector",
