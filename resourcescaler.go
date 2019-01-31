@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/nuclio/errors"
@@ -28,7 +29,8 @@ func New(kubeconfigPath string, namespace string) (scaler_types.ResourceScaler, 
 
 	kubeconfig, err := getClientConfig(kubeconfigPath)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed getting cluster's kubeconfig")
+		rLogger.WarnWith("Could not parse kubeconfig from path", "kubeconfigPath", kubeconfigPath)
+		return nil, errors.Wrap(err, "Failed parsing cluster's kubeconfig from path")
 	}
 
 	kubeClientSet, err := kubernetes.NewForConfig(kubeconfig)
@@ -50,6 +52,55 @@ func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scaling int
 	if err != nil {
 		s.logger.WarnWith("Failure during retrieval of deployment", "resource_name", string(resource))
 		return errors.Wrap(err, "Failed getting deployment instance")
+	}
+
+	// get ingress by resource name
+	ingress, err := s.kubeClientSet.ExtensionsV1beta1().Ingresses(s.namespace).Get(string(resource), meta_v1.GetOptions{})
+	if err != nil {
+		s.logger.WarnWith("Failure during retrieval of ingress", "resource_name", string(resource))
+		return errors.Wrap(err, "Failed getting ingress instance")
+	}
+
+	// get service by resource name
+	service, err := s.kubeClientSet.CoreV1().Services(s.namespace).Get(string(resource), meta_v1.GetOptions{})
+	if err != nil {
+		s.logger.WarnWith("Failure during retrieval of service", "resource_name", string(resource))
+		return errors.Wrap(err, "Failed getting service instance")
+	}
+
+	ingress.GetObjectMeta().SetAnnotations(map[string]string{
+		"nginx.ingress.kubernetes.io/configuration-snippet": fmt.Sprintf(
+			`proxy_set_header X-App-Target "%s";`, string(resource)),
+	})
+	_, err = s.kubeClientSet.ExtensionsV1beta1().Ingresses(s.namespace).Update(ingress)
+	if err != nil {
+		s.logger.WarnWith("Failure during update of ingress with annotation",
+			"resource_name", string(resource))
+		return errors.Wrap(err, "Failed updating ingress instance")
+	}
+
+	if scaling == 0 {
+		// update service selector to refer to dlx
+		s.logger.InfoWith("Changing service's selector to work with dlx", "service_name", string(resource))
+
+		service.Spec.Selector = map[string]string{"app": "scaler-dlx"}
+		_, err := s.kubeClientSet.CoreV1().Services(s.namespace).Update(service)
+		if err != nil {
+			s.logger.WarnWith("Failure during update of service with selector",
+				"resource_name", string(resource))
+			return errors.Wrap(err, "Failed updating service instance")
+		}
+	} else {
+		// update service selector to refer to resource
+		s.logger.InfoWith("Changing service's selector back to work with resource", "service_name", string(resource))
+
+		service.Spec.Selector = service.GetLabels()
+		_, err := s.kubeClientSet.CoreV1().Services(s.namespace).Update(service)
+		if err != nil {
+			s.logger.WarnWith("Failure during update of service with selector",
+				"resource_name", string(resource))
+			return errors.Wrap(err, "Failed updating service instance")
+		}
 	}
 
 	// set deployment num of replicas by scaling factor (0/1)
