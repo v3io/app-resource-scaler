@@ -118,9 +118,11 @@ func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scaling int
 
 	// if scaling up, make sure that all pods are in running state
 	if scaling != 0 {
+		s.logger.Info("Waiting for pods to be running")
 		if s.waitForServicePodsStatus(service, s.namespace, v1.PodRunning) != nil {
 			return errors.Wrap(err, "Failed while waiting for service pods status")
 		}
+		s.logger.Info("All pods are running")
 	}
 	
 	return nil
@@ -139,7 +141,7 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 		resources = append(resources, scaler_types.Resource(deployment.Name))
 	}
 
-	s.logger.InfoWith("Found deployments", "deployments", resources)
+	s.logger.DebugWith("Found deployments", "deployments", resources)
 	return resources, nil
 }
 
