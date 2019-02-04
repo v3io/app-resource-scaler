@@ -47,13 +47,6 @@ func New(kubeconfigPath string, namespace string) (scaler_types.ResourceScaler, 
 
 func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scaling int) error {
 
-	// get deployment by resource name
-	deployment, err := s.kubeClientSet.AppsV1beta1().Deployments(s.namespace).Get(string(resource), meta_v1.GetOptions{})
-	if err != nil {
-		s.logger.WarnWith("Failure during retrieval of deployment", "resource_name", string(resource))
-		return errors.Wrap(err, "Failed getting deployment instance")
-	}
-
 	// get ingress by resource name
 	ingress, err := s.kubeClientSet.ExtensionsV1beta1().Ingresses(s.namespace).Get(string(resource), meta_v1.GetOptions{})
 	if err != nil {
@@ -61,22 +54,23 @@ func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scaling int
 		return errors.Wrap(err, "Failed getting ingress instance")
 	}
 
-	// get service by resource name
-	service, err := s.kubeClientSet.CoreV1().Services(s.namespace).Get(string(resource), meta_v1.GetOptions{})
-	if err != nil {
-		s.logger.WarnWith("Failure during retrieval of service", "resource_name", string(resource))
-		return errors.Wrap(err, "Failed getting service instance")
-	}
-
 	ingress.GetObjectMeta().SetAnnotations(map[string]string{
 		"nginx.ingress.kubernetes.io/configuration-snippet": fmt.Sprintf(
 			`proxy_set_header X-App-Target "%s";`, string(resource)),
 	})
+
 	_, err = s.kubeClientSet.ExtensionsV1beta1().Ingresses(s.namespace).Update(ingress)
 	if err != nil {
 		s.logger.WarnWith("Failure during update of ingress with annotation",
 			"resource_name", string(resource))
 		return errors.Wrap(err, "Failed updating ingress instance")
+	}
+
+	// get service by resource name
+	service, err := s.kubeClientSet.CoreV1().Services(s.namespace).Get(string(resource), meta_v1.GetOptions{})
+	if err != nil {
+		s.logger.WarnWith("Failure during retrieval of service", "resource_name", string(resource))
+		return errors.Wrap(err, "Failed getting service instance")
 	}
 
 	if scaling == 0 {
@@ -103,6 +97,13 @@ func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scaling int
 		}
 	}
 
+	// get deployment by resource name
+	deployment, err := s.kubeClientSet.AppsV1beta1().Deployments(s.namespace).Get(string(resource), meta_v1.GetOptions{})
+	if err != nil {
+		s.logger.WarnWith("Failure during retrieval of deployment", "resource_name", string(resource))
+		return errors.Wrap(err, "Failed getting deployment instance")
+	}
+
 	// set deployment num of replicas by scaling factor (0/1)
 	int32scaling := int32(scaling)
 	deployment.Spec.Replicas = &int32scaling
@@ -111,6 +112,8 @@ func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scaling int
 		s.logger.WarnWith("Failure during update of deployment", "resource_name", string(resource))
 		return errors.Wrap(err, "Failed updating deployment instance")
 	}
+
+	// TODO: if scaling up, wait for resource to be ready
 
 	return nil
 }
