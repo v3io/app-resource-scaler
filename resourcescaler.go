@@ -3,13 +3,16 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/nuclio/errors"
 	"github.com/nuclio/logger"
+	"github.com/nuclio/zap"
 	"github.com/v3io/scaler-types"
 
-	"github.com/nuclio/zap"
+	"k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -113,8 +116,13 @@ func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scaling int
 		return errors.Wrap(err, "Failed updating deployment instance")
 	}
 
-	// TODO: if scaling up, wait for resource to be ready
-
+	// if scaling up, make sure that all pods are in running state
+	if scaling != 0 {
+		if s.waitForServicePodsStatus(service, s.namespace, v1.PodRunning) != nil {
+			return errors.Wrap(err, "Failed while waiting for service pods status")
+		}
+	}
+	
 	return nil
 }
 
@@ -131,11 +139,54 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 		resources = append(resources, scaler_types.Resource(deployment.Name))
 	}
 
+	s.logger.InfoWith("Found deployments", "deployments", resources)
 	return resources, nil
 }
 
 func (s *AppResourceScaler) GetConfig() (*scaler_types.ResourceScalerConfig, error) {
 	return nil, nil
+}
+
+func (s *AppResourceScaler) waitForServicePodsStatus(service *v1.Service, namespace string, status v1.PodPhase) error {
+	servicePods, err := s.getPodsOfService(service, namespace)
+	if err != nil {
+		return errors.Wrap(err, "Failure getting pods of service")
+	}
+
+	for {
+		runningPods := 0
+		for _, servicePod := range servicePods {
+			if servicePod.Status.Phase == status {
+				runningPods++
+			}
+		}
+
+		if runningPods == len(servicePods) {
+			break
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	return nil
+}
+
+// Retrieves pods by the labels of the service
+func (s *AppResourceScaler) getPodsOfService(service *v1.Service, namespace string) ([]v1.Pod, error) {
+	servicePods := make([]v1.Pod, 0)
+	labelsList := labels.FormatLabels(service.ObjectMeta.Labels)
+
+	pods, err := s.kubeClientSet.CoreV1().Pods(namespace).List(meta_v1.ListOptions{LabelSelector: labelsList})
+	if err != nil {
+		s.logger.WarnWith("Failed to retrieve pods by labels of service",
+			"service", service.Name, "labels", labelsList)
+		return nil, errors.Wrap(err, "Failed to retrieve pods by labels list")
+	}
+
+	for _, pod := range pods.Items {
+		servicePods = append(servicePods, pod)
+	}
+	return servicePods, nil
 }
 
 func getClientConfig(kubeconfigPath string) (*rest.Config, error) {
