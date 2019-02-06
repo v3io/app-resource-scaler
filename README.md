@@ -16,5 +16,5 @@ To publish the image just `docker push` the resulting images to your favorite re
 
 ## Notes
 
-Modifying `vendors` dir may result in incompatability with `vendors` in <a href="https://github.com/v3io/scaler"> scaler </a>.
+Modifying `vendor` dir may result in incompatability with `vendor` in <a href="https://github.com/v3io/scaler"> scaler </a>.
 Please run `docker build` as described above to verify nothing was broken.
