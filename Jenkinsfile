@@ -74,7 +74,7 @@ spec:
                 if (TAG_VERSION != null && TAG_VERSION.length() > 0 && PUBLISHED_BEFORE < expired) {
                     stage('prepare sources') {
                         container('jnlp') {
-                            dir("${BUILD_FOLDER}/src/github.com/v3io/${git_project}") {
+                            dir("${BUILD_FOLDER}/src/github.com/iguazio/${git_project}") {
                                 git(changelog: false, credentialsId: git_deploy_user_private_key, poll: false, url: "git@github.com:${git_project_user}/${git_project}.git")
                                 sh("git checkout ${TAG_VERSION}")
                             }
@@ -83,15 +83,15 @@ spec:
 
                     stage("build ${git_project} in dood") {
                         container('docker-cmd') {
-                            dir("${BUILD_FOLDER}/src/github.com/v3io/${git_project}") {
-                                sh("LOCATOR_TAG=${DOCKER_TAG_VERSION} LOCATOR_REPOSITORY='' make build")
+                            dir("${BUILD_FOLDER}/src/github.com/iguazio/${git_project}") {
+                                sh("SCALER_TAG=${DOCKER_TAG_VERSION} SCALER_REPOSITORY='' make build")
                             }
                         }
                     }
 
                     stage('push') {
                         container('docker-cmd') {
-                            dockerx.images_push_multi_registries(["${git_project}:${DOCKER_TAG_VERSION}"], multi_credentials)
+                            dockerx.images_push_multi_registries(["scaler:${DOCKER_TAG_VERSION}", "dlx:${DOCKER_TAG_VERSION}"], multi_credentials)
                         }
                     }
 
