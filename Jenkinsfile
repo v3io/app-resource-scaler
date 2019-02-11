@@ -2,7 +2,7 @@ label = "${UUID.randomUUID().toString()}"
 BUILD_FOLDER = "/go"
 expired=240
 git_project = "app-resource-scaler"
-git_project_user = "iguazio"
+git_project_user = "v3io"
 git_deploy_user_token = "iguazio-prod-git-user-token"
 git_deploy_user_private_key = "iguazio-prod-git-user-private-key"
 
@@ -74,7 +74,7 @@ spec:
                 if (TAG_VERSION != null && TAG_VERSION.length() > 0 && PUBLISHED_BEFORE < expired) {
                     stage('prepare sources') {
                         container('jnlp') {
-                            dir("${BUILD_FOLDER}/src/github.com/iguazio/${git_project}") {
+                            dir("${BUILD_FOLDER}/src/github.com/v3io/${git_project}") {
                                 git(changelog: false, credentialsId: git_deploy_user_private_key, poll: false, url: "git@github.com:${git_project_user}/${git_project}.git")
                                 sh("git checkout ${TAG_VERSION}")
                             }
@@ -83,7 +83,7 @@ spec:
 
                     stage("build ${git_project} in dood") {
                         container('docker-cmd') {
-                            dir("${BUILD_FOLDER}/src/github.com/iguazio/${git_project}") {
+                            dir("${BUILD_FOLDER}/src/github.com/v3io/${git_project}") {
                                 sh("SCALER_TAG=${DOCKER_TAG_VERSION} SCALER_REPOSITORY='' make build")
                             }
                         }
