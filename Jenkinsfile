@@ -91,7 +91,7 @@ spec:
 
                     stage('push') {
                         container('docker-cmd') {
-                            dockerx.images_push_multi_registries(["scaler:${DOCKER_TAG_VERSION}", "dlx:${DOCKER_TAG_VERSION}"], multi_credentials)
+                            dockerx.images_push_multi_registries(["autoscaler:${DOCKER_TAG_VERSION}", "dlx:${DOCKER_TAG_VERSION}"], multi_credentials)
                         }
                     }
 
