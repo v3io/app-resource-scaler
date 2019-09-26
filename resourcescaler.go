@@ -100,6 +100,7 @@ func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName str
 
 func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, jsonPatchMapper []map[string]string) error {
 	body, err := json.Marshal(jsonPatchMapper)
+	s.logger.DebugWith("Patching iguazio tenant app service sets", "body", string(body))
 	if err != nil {
 		return errors.Wrap(err, "Could not marshal json patch mapper")
 	}
@@ -113,6 +114,7 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, j
 }
 
 func (s *AppResourceScaler) waitForServiceReadiness(namespace string, serviceName string) error {
+	s.logger.DebugWith("Waiting for service readiness", "serviceName", serviceName)
 	for {
 		resourcesList, err := s.GetResources()
 		if err != nil {
