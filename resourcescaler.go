@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
 	"os"
 	"time"
 
@@ -10,9 +12,6 @@ import (
 	"github.com/nuclio/zap"
 	"github.com/v3io/scaler-types"
 
-	"k8s.io/api/core/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -48,147 +47,140 @@ func New(kubeconfigPath string, namespace string) (scaler_types.ResourceScaler, 
 	}, nil
 }
 
-func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scaling int) error {
-
-	// get ingress by resource name
-	ingress, err := s.kubeClientSet.ExtensionsV1beta1().Ingresses(s.namespace).Get(string(resource), meta_v1.GetOptions{})
-	if err != nil {
-		s.logger.WarnWith("Failure during retrieval of ingress", "resource_name", string(resource))
-		return errors.Wrap(err, "Failed getting ingress instance")
+func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scale int) error {
+	if scale == 0 {
+		return s.scaleServiceToZero(s.namespace, string(resource))
 	}
+	return s.scaleServiceFromZero(s.namespace, string(resource))
+}
 
-	ingress.GetObjectMeta().SetAnnotations(map[string]string{
-		"nginx.ingress.kubernetes.io/configuration-snippet": fmt.Sprintf(
-			`proxy_set_header X-App-Target "%s";`, string(resource)),
+func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName string) error {
+	var jsonPatchMapper []map[string]string
+	s.logger.DebugWith("Scaling from zero", "namespace", namespace, "serviceName", serviceName)
+	path := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/state", string(serviceName))
+	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
+		"op":    "add",
+		"path":  path,
+		"value": "scaledFromZero",
 	})
 
-	_, err = s.kubeClientSet.ExtensionsV1beta1().Ingresses(s.namespace).Update(ingress)
+	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
+		"op":    "add",
+		"path":  "/status/state",
+		"value": "waitingForProvisioning",
+	})
+
+	err := s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
+
 	if err != nil {
-		s.logger.WarnWith("Failure during update of ingress with annotation",
-			"resource_name", string(resource))
-		return errors.Wrap(err, "Failed updating ingress instance")
+		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
 	}
 
-	// get service by resource name
-	service, err := s.kubeClientSet.CoreV1().Services(s.namespace).Get(string(resource), meta_v1.GetOptions{})
+	return s.waitForServiceReadiness(namespace, serviceName)
+}
+
+func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName string) error {
+	var jsonPatchMapper []map[string]string
+	s.logger.DebugWith("Scaling to zero", "namespace", namespace, "serviceName", serviceName)
+	path := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/state", string(serviceName))
+	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
+		"op":    "add",
+		"path":  path,
+		"value": "scaledToZero",
+	})
+
+	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
+		"op":    "add",
+		"path":  "/status/state",
+		"value": "waitingForProvisioning",
+	})
+
+	return s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
+}
+
+func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, jsonPatchMapper []map[string]string) error {
+	body, err := json.Marshal(jsonPatchMapper)
 	if err != nil {
-		s.logger.WarnWith("Failure during retrieval of service", "resource_name", string(resource))
-		return errors.Wrap(err, "Failed getting service instance")
+		return errors.Wrap(err, "Could not marshal json patch mapper")
 	}
 
-	if scaling == 0 {
-		// update service selector to refer to dlx
-		s.logger.InfoWith("Changing service's selector to work with dlx", "service_name", string(resource))
+	absPath := []string{"apis", "iguazio.com", "v1beta1", "namespaces", namespace, "iguaziotenantappservicesets", namespace}
+	_, err = s.kubeClientSet.Discovery().RESTClient().Patch(types.JSONPatchType).Body(body).AbsPath(absPath...).Do().Raw()
+	if err != nil {
+		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
+	}
+	return nil
+}
 
-		service.Spec.Selector = map[string]string{"app": "scaler", "component": "dlx"}
-		_, err := s.kubeClientSet.CoreV1().Services(s.namespace).Update(service)
+func (s *AppResourceScaler) waitForServiceReadiness(namespace string, serviceName string) error {
+	for {
+		resourcesList, err := s.GetResources()
 		if err != nil {
-			s.logger.WarnWith("Failure during update of service with selector",
-				"resource_name", string(resource))
-			return errors.Wrap(err, "Failed updating service instance")
+			return errors.Wrap(err, "Failed to get ready services")
 		}
-	} else {
-		// update service selector to refer to resource
-		s.logger.InfoWith("Changing service's selector back to work with resource", "service_name", string(resource))
-
-		service.Spec.Selector = service.GetLabels()
-		_, err := s.kubeClientSet.CoreV1().Services(s.namespace).Update(service)
-		if err != nil {
-			s.logger.WarnWith("Failure during update of service with selector",
-				"resource_name", string(resource))
-			return errors.Wrap(err, "Failed updating service instance")
+		for _, resource := range resourcesList {
+			if string(resource) == serviceName {
+				s.logger.DebugWith("Service ready", "serviceName", serviceName)
+				return nil
+			}
 		}
+		time.Sleep(5 * time.Second)
 	}
-
-	// get deployment by resource name
-	deployment, err := s.kubeClientSet.AppsV1beta1().Deployments(s.namespace).Get(string(resource), meta_v1.GetOptions{})
-	if err != nil {
-		s.logger.WarnWith("Failure during retrieval of deployment", "resource_name", string(resource))
-		return errors.Wrap(err, "Failed getting deployment instance")
-	}
-
-	// set deployment num of replicas by scaling factor (0/1)
-	int32scaling := int32(scaling)
-	deployment.Spec.Replicas = &int32scaling
-	_, err = s.kubeClientSet.AppsV1beta1().Deployments(s.namespace).Update(deployment)
-	if err != nil {
-		s.logger.WarnWith("Failure during update of deployment", "resource_name", string(resource))
-		return errors.Wrap(err, "Failed updating deployment instance")
-	}
-
-	// if scaling up, make sure that all pods are in running state
-	if scaling != 0 {
-		s.logger.Info("Waiting for pods to be running")
-		if s.waitForServicePodsStatus(service, s.namespace, v1.PodRunning) != nil {
-			return errors.Wrap(err, "Failed while waiting for service pods status")
-		}
-		s.logger.Info("All pods are running")
-	}
-	
 	return nil
 }
 
 func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
+	var iguazioTenantAppServicesSetMap map[string]interface{}
 	resources := make([]scaler_types.Resource, 0)
 
-	deploymentsList, err := s.kubeClientSet.AppsV1beta1().Deployments(s.namespace).List(meta_v1.ListOptions{})
+	absPath := []string{"apis", "iguazio.com", "v1beta1", "namespaces", s.namespace, "iguaziotenantappservicesets", s.namespace}
+	iguazioTenantAppServicesSet, err := s.kubeClientSet.Discovery().RESTClient().Get().AbsPath(absPath...).Do().Raw()
+
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get listed releases")
+		return nil, errors.Wrap(err, "Failed to get iguazio tenant app service sets")
 	}
 
-	// return the names of all deployments
-	for _, deployment := range deploymentsList.Items {
-		resources = append(resources, scaler_types.Resource(deployment.Name))
+	if err := json.Unmarshal(iguazioTenantAppServicesSet, &iguazioTenantAppServicesSetMap); err != nil {
+		return nil, errors.Wrap(err, "Failed to unmarshal response")
 	}
 
-	s.logger.DebugWith("Found deployments", "deployments", resources)
+	status, ok := iguazioTenantAppServicesSetMap["status"].(map[string]interface{})
+	if !ok {
+		s.logger.WarnWith("Service set does not have status", "serviceSet", iguazioTenantAppServicesSetMap)
+		return resources, nil
+	}
+
+	servicesMap, ok := status["services"].(map[string]interface{})
+	if !ok {
+		s.logger.WarnWith("Status does not have services", "status", status)
+		return resources, nil
+	}
+
+	for serviceName, serviceStatus := range servicesMap {
+		serviceStatusMap, ok := serviceStatus.(map[string]interface{})
+		if !ok {
+			s.logger.WarnWith("Service status type assertion failed, continuing", "serviceStatus", serviceStatus)
+			continue
+		}
+
+		stateString, ok := serviceStatusMap["state"].(string)
+		if !ok {
+			s.logger.WarnWith("Service status does not have state, continuing", "serviceStatusMap", serviceStatusMap)
+			continue
+		}
+
+		if stateString == "ready" {
+			resources = append(resources, scaler_types.Resource(serviceName))
+		}
+	}
+
+	s.logger.DebugWith("Found services", "services", resources)
+
 	return resources, nil
 }
 
 func (s *AppResourceScaler) GetConfig() (*scaler_types.ResourceScalerConfig, error) {
 	return nil, nil
-}
-
-func (s *AppResourceScaler) waitForServicePodsStatus(service *v1.Service, namespace string, status v1.PodPhase) error {
-	servicePods, err := s.getPodsOfService(service, namespace)
-	if err != nil {
-		return errors.Wrap(err, "Failure getting pods of service")
-	}
-
-	for {
-		runningPods := 0
-		for _, servicePod := range servicePods {
-			if servicePod.Status.Phase == status {
-				runningPods++
-			}
-		}
-
-		if runningPods == len(servicePods) {
-			break
-		}
-
-		time.Sleep(time.Second)
-	}
-
-	return nil
-}
-
-// Retrieves pods by the labels of the service
-func (s *AppResourceScaler) getPodsOfService(service *v1.Service, namespace string) ([]v1.Pod, error) {
-	servicePods := make([]v1.Pod, 0)
-	labelsList := labels.FormatLabels(service.ObjectMeta.Labels)
-
-	pods, err := s.kubeClientSet.CoreV1().Pods(namespace).List(meta_v1.ListOptions{LabelSelector: labelsList})
-	if err != nil {
-		s.logger.WarnWith("Failed to retrieve pods by labels of service",
-			"service", service.Name, "labels", labelsList)
-		return nil, errors.Wrap(err, "Failed to retrieve pods by labels list")
-	}
-
-	for _, pod := range pods.Items {
-		servicePods = append(servicePods, pod)
-	}
-	return servicePods, nil
 }
 
 func getClientConfig(kubeconfigPath string) (*rest.Config, error) {
