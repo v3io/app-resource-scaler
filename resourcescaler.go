@@ -57,7 +57,7 @@ func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scale int) 
 func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName string) error {
 	var jsonPatchMapper []map[string]string
 	s.logger.DebugWith("Scaling from zero", "namespace", namespace, "serviceName", serviceName)
-	path := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/state", string(serviceName))
+	path := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
 	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
 		"op":    "add",
 		"path":  path,
@@ -82,7 +82,7 @@ func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName s
 func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName string) error {
 	var jsonPatchMapper []map[string]string
 	s.logger.DebugWith("Scaling to zero", "namespace", namespace, "serviceName", serviceName)
-	path := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/state", string(serviceName))
+	path := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
 	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
 		"op":    "add",
 		"path":  path,
