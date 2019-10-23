@@ -73,13 +73,22 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 	specServicesMap := s.parseSpecServices(iguazioTenantAppServicesSetMap)
 
 	for statusServiceName, serviceStatus := range statusServicesMap {
+
+		// Nuclio is a special service since it's a controller itself, so its scale to zero spec is configuring
+		// how and when it should scale its resources, and how and when we should scale him
+		if statusServiceName == "nuclio" {
+			continue
+		}
+
 		stateString, err := s.parseServiceState(serviceStatus)
 		if err != nil {
 			s.logger.WarnWith("Failed parsing the service state, continuing", "err", err, "serviceStatus", serviceStatus)
 			continue
 		}
 
-		if stateString == "ready" {
+		_, serviceSpecExists := specServicesMap[statusServiceName]
+
+		if stateString == "ready" && serviceSpecExists {
 
 			scaleResources, err := s.parseScaleResources(specServicesMap[statusServiceName])
 			if err != nil {
@@ -87,10 +96,12 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 				continue
 			}
 
-			resources = append(resources, scaler_types.Resource{
-				Name:           statusServiceName,
-				ScaleResources: scaleResources,
-			})
+			if len(scaleResources) != 0 {
+				resources = append(resources, scaler_types.Resource{
+					Name:           statusServiceName,
+					ScaleResources: scaleResources,
+				})
+			}
 		}
 	}
 
@@ -270,7 +281,9 @@ func (s *AppResourceScaler) parseScaleResources(serviceSpecInterface interface{}
 
 	scaleToZeroSpec, ok := serviceSpec["scale_to_zero"].(map[string]interface{})
 	if !ok {
-		return []scaler_types.ScaleResource{}, errors.New("Service spec does not have scale to zero spec")
+
+		// It's ok for a service to not have the scale_to_zero spec
+		return []scaler_types.ScaleResource{}, nil
 	}
 
 	scaleToZeroMode, ok := scaleToZeroSpec["mode"].(string)
@@ -280,7 +293,7 @@ func (s *AppResourceScaler) parseScaleResources(serviceSpecInterface interface{}
 
 	// if it's not enabled there's no reason to parse the rest
 	if scaleToZeroMode == "enabled" {
-		scaleResourcesList, ok := scaleToZeroSpec["scaler_resources"].([]interface{})
+		scaleResourcesList, ok := scaleToZeroSpec["scale_resources"].([]interface{})
 		if !ok {
 			return []scaler_types.ScaleResource{}, errors.New("Scale to zero spec does not have scale resources")
 		}
@@ -296,7 +309,7 @@ func (s *AppResourceScaler) parseScaleResources(serviceSpecInterface interface{}
 				return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have metric name")
 			}
 
-			threshold, ok := scaleResource["threshold"].(int)
+			threshold, ok := scaleResource["threshold"].(float64)
 			if !ok {
 				return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have threshold")
 			}
@@ -314,7 +327,7 @@ func (s *AppResourceScaler) parseScaleResources(serviceSpecInterface interface{}
 			parsedScaleResource := scaler_types.ScaleResource{
 				MetricName: metricName,
 				WindowSize: windowSize,
-				Threshold:  threshold,
+				Threshold:  int(threshold),
 			}
 
 			parsedScaleResources = append(parsedScaleResources, parsedScaleResource)
