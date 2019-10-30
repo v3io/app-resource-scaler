@@ -10,7 +10,6 @@ import (
 	"github.com/nuclio/logger"
 	"github.com/nuclio/zap"
 	"github.com/v3io/scaler-types"
-
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
