@@ -55,22 +55,12 @@ func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scale int) 
 }
 
 func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
-	var iguazioTenantAppServicesSetMap map[string]interface{}
 	resources := make([]scaler_types.Resource, 0)
 
-	absPath := []string{"apis", "iguazio.com", "v1beta1", "namespaces", s.namespace, "iguaziotenantappservicesets", s.namespace}
-	iguazioTenantAppServicesSet, err := s.kubeClientSet.Discovery().RESTClient().Get().AbsPath(absPath...).Do().Raw()
-
+	specServicesMap, statusServicesMap, err := s.getIguazioTenantAppServiceSets()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get iguazio tenant app service sets")
 	}
-
-	if err := json.Unmarshal(iguazioTenantAppServicesSet, &iguazioTenantAppServicesSetMap); err != nil {
-		return nil, errors.Wrap(err, "Failed to unmarshal response")
-	}
-
-	statusServicesMap := s.parseStatusServices(iguazioTenantAppServicesSetMap)
-	specServicesMap := s.parseSpecServices(iguazioTenantAppServicesSetMap)
 
 	for statusServiceName, serviceStatus := range statusServicesMap {
 
@@ -82,7 +72,9 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 
 		stateString, err := s.parseServiceState(serviceStatus)
 		if err != nil {
-			s.logger.WarnWith("Failed parsing the service state, continuing", "err", err, "serviceStatus", serviceStatus)
+			s.logger.WarnWith("Failed parsing the service state, continuing",
+				"err", errors.GetErrorStackString(err, 10),
+				"serviceStatus", serviceStatus)
 			continue
 		}
 
@@ -92,14 +84,26 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 
 			scaleResources, err := s.parseScaleResources(specServicesMap[statusServiceName])
 			if err != nil {
-				s.logger.WarnWith("Failed parsing the scale resources, continuing", "err", err, "serviceSpec", specServicesMap[statusServiceName])
+				s.logger.WarnWith("Failed parsing the scale resources, continuing",
+					"err", errors.GetErrorStackString(err, 10),
+					"serviceSpec", specServicesMap[statusServiceName])
 				continue
 			}
 
 			if len(scaleResources) != 0 {
+
+				lastScaleState, lastScaleStateTime, err := s.parseLastScaleState(serviceStatus)
+				if err != nil {
+					s.logger.DebugWith("Failed parsing last scale state from service status, using defaults")
+					lastScaleState = scaler_types.NonScaleState
+					lastScaleStateTime = time.Now()
+				}
+
 				resources = append(resources, scaler_types.Resource{
-					Name:           statusServiceName,
-					ScaleResources: scaleResources,
+					Name:               statusServiceName,
+					ScaleResources:     scaleResources,
+					LastScaleState:     lastScaleState,
+					LastScaleStateTime: lastScaleStateTime,
 				})
 			}
 		}
@@ -117,20 +121,35 @@ func (s *AppResourceScaler) GetConfig() (*scaler_types.ResourceScalerConfig, err
 func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName string) error {
 	var jsonPatchMapper []map[string]string
 	s.logger.DebugWith("Scaling from zero", "namespace", namespace, "serviceName", serviceName)
-	path := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
+	desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
+	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_state", string(serviceName))
+	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_state_time", string(serviceName))
+	marshaledTime, err := time.Now().MarshalJSON()
+	if err != nil {
+		return errors.Wrap(err, "Failed to marshal time")
+	}
 	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
 		"op":    "add",
-		"path":  path,
+		"path":  desiredStatePath,
 		"value": "scaledFromZero",
 	})
-
 	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
 		"op":    "add",
 		"path":  "/status/state",
 		"value": "waitingForProvisioning",
 	})
+	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
+		"op":    "add",
+		"path":  lastScaleStatePath,
+		"value": string(scaler_types.ScalingFromZeroScaleState),
+	})
+	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
+		"op":    "add",
+		"path":  lastScaleStateTimePath,
+		"value": string(marshaledTime),
+	})
 
-	err := s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
+	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
 
 	if err != nil {
 		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
@@ -142,10 +161,16 @@ func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName s
 func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName string) error {
 	var jsonPatchMapper []map[string]string
 	s.logger.DebugWith("Scaling to zero", "namespace", namespace, "serviceName", serviceName)
-	path := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
+	desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
+	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_state", string(serviceName))
+	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_state_time", string(serviceName))
+	marshaledTime, err := time.Now().MarshalJSON()
+	if err != nil {
+		return errors.Wrap(err, "Failed to marshal time")
+	}
 	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
 		"op":    "add",
-		"path":  path,
+		"path":  desiredStatePath,
 		"value": "scaledToZero",
 	})
 
@@ -153,6 +178,16 @@ func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName str
 		"op":    "add",
 		"path":  "/status/state",
 		"value": "waitingForProvisioning",
+	})
+	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
+		"op":    "add",
+		"path":  lastScaleStatePath,
+		"value": string(scaler_types.ScalingToZeroScaleState),
+	})
+	jsonPatchMapper = append(jsonPatchMapper, map[string]string{
+		"op":    "add",
+		"path":  lastScaleStateTimePath,
+		"value": string(marshaledTime),
 	})
 
 	return s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
@@ -197,6 +232,26 @@ func getClientConfig(kubeconfigPath string) (*rest.Config, error) {
 	}
 
 	return rest.InClusterConfig()
+}
+
+func (s *AppResourceScaler) getIguazioTenantAppServiceSets() (map[string]interface{}, map[string]interface{}, error) {
+	var iguazioTenantAppServicesSetMap map[string]interface{}
+
+	absPath := []string{"apis", "iguazio.com", "v1beta1", "namespaces", s.namespace, "iguaziotenantappservicesets", s.namespace}
+	iguazioTenantAppServicesSet, err := s.kubeClientSet.Discovery().RESTClient().Get().AbsPath(absPath...).Do().Raw()
+
+	if err != nil {
+		return map[string]interface{}{}, map[string]interface{}{}, errors.Wrap(err, "Failed to get iguazio tenant app service sets")
+	}
+
+	if err := json.Unmarshal(iguazioTenantAppServicesSet, &iguazioTenantAppServicesSetMap); err != nil {
+		return map[string]interface{}{}, map[string]interface{}{}, errors.Wrap(err, "Failed to unmarshal response")
+	}
+
+	statusServicesMap := s.parseStatusServices(iguazioTenantAppServicesSetMap)
+	specServicesMap := s.parseSpecServices(iguazioTenantAppServicesSetMap)
+
+	return specServicesMap, statusServicesMap, nil
 }
 
 func (s *AppResourceScaler) parseSpecServices(iguazioTenantAppServicesSetMap map[string]interface{}) map[string]interface{} {
@@ -256,6 +311,35 @@ func (s *AppResourceScaler) parseStatusServices(iguazioTenantAppServicesSetMap m
 	}
 
 	return servicesMap
+}
+
+func (s *AppResourceScaler) parseLastScaleState(serviceStatus interface{}) (scaler_types.ScaleState, time.Time, error) {
+	serviceStatusMap, ok := serviceStatus.(map[string]interface{})
+	if !ok {
+		return "", time.Now(), errors.New("Service status type assertion failed")
+	}
+
+	scaleToZeroStatus, ok := serviceStatusMap["scale_to_zero"].(map[string]interface{})
+	if !ok {
+		return "", time.Now(), errors.New("Service status does not have scale to zero status")
+	}
+
+	lastScaleStateString, ok := scaleToZeroStatus["last_scale_state"].(string)
+	if !ok {
+		return "", time.Now(), errors.New("Scale to zero status does not have last scale state")
+	}
+
+	lastScaleState, err := scaler_types.ParseScaleState(lastScaleStateString)
+	if err != nil {
+		return "", time.Now(), errors.Wrap(err, "Failed to parse scale state")
+	}
+
+	lastScaleStateTime, ok := scaleToZeroStatus["last_scale_state_time"].(time.Time)
+	if !ok {
+		return "", time.Now(), errors.New("Scale to zero status does not have last scale state time")
+	}
+
+	return lastScaleState, lastScaleStateTime, nil
 }
 
 func (s *AppResourceScaler) parseServiceState(serviceStatus interface{}) (string, error) {
