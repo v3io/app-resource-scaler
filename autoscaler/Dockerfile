@@ -5,9 +5,9 @@
 FROM golang:1.10-alpine3.7 as builder
 
 RUN apk --update --no-cache add \
-git \
-gcc \
-musl-dev
+    git \
+    gcc \
+    musl-dev
 
 WORKDIR /go/src/github.com/v3io/app_resourcescaler
 
