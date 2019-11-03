@@ -439,46 +439,48 @@ func (s *AppResourceScaler) parseScaleResources(serviceSpecInterface interface{}
 	}
 
 	// if it's not enabled there's no reason to parse the rest
-	if scaleToZeroMode == "enabled" {
-		scaleResourcesList, ok := scaleToZeroSpec["scale_resources"].([]interface{})
+	if scaleToZeroMode != "enabled" {
+		return []scaler_types.ScaleResource{}, nil
+	}
+
+	scaleResourcesList, ok := scaleToZeroSpec["scale_resources"].([]interface{})
+	if !ok {
+		return []scaler_types.ScaleResource{}, errors.New("Scale to zero spec does not have scale resources")
+	}
+
+	for _, scaleResourceInterface := range scaleResourcesList {
+		scaleResource, ok := scaleResourceInterface.(map[string]interface{})
 		if !ok {
-			return []scaler_types.ScaleResource{}, errors.New("Scale to zero spec does not have scale resources")
+			return []scaler_types.ScaleResource{}, errors.New("Scale resource type assertion failed")
 		}
 
-		for _, scaleResourceInterface := range scaleResourcesList {
-			scaleResource, ok := scaleResourceInterface.(map[string]interface{})
-			if !ok {
-				return []scaler_types.ScaleResource{}, errors.New("Scale resource type assertion failed")
-			}
-
-			metricName, ok := scaleResource["metric_name"].(string)
-			if !ok {
-				return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have metric name")
-			}
-
-			threshold, ok := scaleResource["threshold"].(float64)
-			if !ok {
-				return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have threshold")
-			}
-
-			windowSizeString, ok := scaleResource["window_size"].(string)
-			if !ok {
-				return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have metric window size")
-			}
-
-			windowSize, err := time.ParseDuration(windowSizeString)
-			if err != nil {
-				return []scaler_types.ScaleResource{}, errors.Wrap(err, "Failed to parse window size")
-			}
-
-			parsedScaleResource := scaler_types.ScaleResource{
-				MetricName: metricName,
-				WindowSize: windowSize,
-				Threshold:  int(threshold),
-			}
-
-			parsedScaleResources = append(parsedScaleResources, parsedScaleResource)
+		metricName, ok := scaleResource["metric_name"].(string)
+		if !ok {
+			return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have metric name")
 		}
+
+		threshold, ok := scaleResource["threshold"].(float64)
+		if !ok {
+			return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have threshold")
+		}
+
+		windowSizeString, ok := scaleResource["window_size"].(string)
+		if !ok {
+			return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have metric window size")
+		}
+
+		windowSize, err := time.ParseDuration(windowSizeString)
+		if err != nil {
+			return []scaler_types.ScaleResource{}, errors.Wrap(err, "Failed to parse window size")
+		}
+
+		parsedScaleResource := scaler_types.ScaleResource{
+			MetricName: metricName,
+			WindowSize: windowSize,
+			Threshold:  int(threshold),
+		}
+
+		parsedScaleResources = append(parsedScaleResources, parsedScaleResource)
 	}
 
 	return parsedScaleResources, nil
