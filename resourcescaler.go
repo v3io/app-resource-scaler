@@ -237,33 +237,40 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, j
 
 func (s *AppResourceScaler) waitForServiceState(namespace string, serviceName string, state string) error {
 	s.logger.DebugWith("Waiting for service to reach state", "serviceName", serviceName, "state", state)
+	timeout := time.After(5 * time.Minute)
+	tick := time.Tick(5 * time.Second)
 	for {
-		_, statusServicesMap, err := s.getIguazioTenantAppServiceSets()
-		if err != nil {
-			return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
-		}
+		select {
+		case <-timeout:
+			return errors.New("Timed out waiting for service state")
+		case <-tick:
 
-		for statusServiceName, serviceStatus := range statusServicesMap {
-			if statusServiceName != serviceName {
-				continue
-			}
-
-			stateString, err := s.parseServiceState(serviceStatus)
+			_, statusServicesMap, err := s.getIguazioTenantAppServiceSets()
 			if err != nil {
-				return errors.Wrap(err, "Failed parsing the service state")
+				return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
 			}
 
-			if stateString == state {
-				s.logger.DebugWith("Service reached to state", "serviceName", serviceName, "state", state)
-				return nil
-			}
+			for statusServiceName, serviceStatus := range statusServicesMap {
+				if statusServiceName != serviceName {
+					continue
+				}
 
-			s.logger.DebugWith("Service did not reach state yet",
-				"serviceName", serviceName,
-				"currentState", stateString,
-				"desiredState", state)
+				stateString, err := s.parseServiceState(serviceStatus)
+				if err != nil {
+					return errors.Wrap(err, "Failed parsing the service state")
+				}
+
+				if stateString == state {
+					s.logger.DebugWith("Service reached to state", "serviceName", serviceName, "state", state)
+					return nil
+				}
+
+				s.logger.DebugWith("Service did not reach state yet",
+					"serviceName", serviceName,
+					"currentState", stateString,
+					"desiredState", state)
+			}
 		}
-		time.Sleep(5 * time.Second)
 	}
 }
 
