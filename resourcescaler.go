@@ -91,16 +91,16 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 
 			if len(scaleResources) != 0 {
 
-				lastScaleState, lastScaleStateTime, err := s.parseLastScaleState(serviceStatus)
+				lastScaleEvent, lastScaleEventTime, err := s.parseLastScaleEvent(serviceStatus)
 				if err != nil {
-					return nil, errors.Wrap(err, "Failed to parse last scale state")
+					return nil, errors.Wrap(err, "Failed to parse last scale event")
 				}
 
 				resources = append(resources, scaler_types.Resource{
 					Name:               statusServiceName,
 					ScaleResources:     scaleResources,
-					LastScaleState:     lastScaleState,
-					LastScaleStateTime: lastScaleStateTime,
+					LastScaleEvent:     lastScaleEvent,
+					LastScaleEventTime: lastScaleEventTime,
 				})
 			}
 		}
@@ -120,8 +120,8 @@ func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName s
 	s.logger.DebugWith("Scaling from zero", "namespace", namespace, "serviceName", serviceName)
 	desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
 	scaleToZeroStatusPath := fmt.Sprintf("/status/services/%s/scale_to_zero", string(serviceName))
-	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_state", string(serviceName))
-	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_state_time", string(serviceName))
+	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event", string(serviceName))
+	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event_time", string(serviceName))
 	marshaledTime, err := time.Now().MarshalText()
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal time")
@@ -144,7 +144,7 @@ func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName s
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
 		"path":  lastScaleStatePath,
-		"value": string(scaler_types.ScalingFromZeroScaleState),
+		"value": string(scaler_types.ScaleFromZeroStartedScaleEvent),
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
@@ -172,8 +172,8 @@ func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName str
 	s.logger.DebugWith("Scaling to zero", "namespace", namespace, "serviceName", serviceName)
 	desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
 	scaleToZeroStatusPath := fmt.Sprintf("/status/services/%s/scale_to_zero", string(serviceName))
-	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_state", string(serviceName))
-	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_state_time", string(serviceName))
+	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event", string(serviceName))
+	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event_time", string(serviceName))
 	marshaledTime, err := time.Now().MarshalText()
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal time")
@@ -197,7 +197,7 @@ func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName str
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
 		"path":  lastScaleStatePath,
-		"value": string(scaler_types.ScalingToZeroScaleState),
+		"value": string(scaler_types.ScaleToZeroStartedScaleEvent),
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
@@ -361,31 +361,31 @@ func (s *AppResourceScaler) parseStatusServices(iguazioTenantAppServicesSetMap m
 	return servicesMap
 }
 
-func (s *AppResourceScaler) parseScaleToZeroStatus(scaleToZeroStatus map[string]interface{}) (scaler_types.ScaleState, time.Time, error) {
-	lastScaleStateString, ok := scaleToZeroStatus["last_scale_state"].(string)
+func (s *AppResourceScaler) parseScaleToZeroStatus(scaleToZeroStatus map[string]interface{}) (scaler_types.ScaleEvent, time.Time, error) {
+	lastScaleEventString, ok := scaleToZeroStatus["last_scale_event"].(string)
 	if !ok {
-		return "", time.Now(), errors.New("Scale to zero status does not have last scale state")
+		return "", time.Now(), errors.New("Scale to zero status does not have last scale event")
 	}
 
-	lastScaleState, err := scaler_types.ParseScaleState(lastScaleStateString)
+	lastScaleEvent, err := scaler_types.ParseScaleEvent(lastScaleEventString)
 	if err != nil {
-		return "", time.Now(), errors.Wrap(err, "Failed to parse scale state")
+		return "", time.Now(), errors.Wrap(err, "Failed to parse scale event")
 	}
 
-	lastScaleStateTimeString, ok := scaleToZeroStatus["last_scale_state_time"].(string)
+	lastScaleEventTimeString, ok := scaleToZeroStatus["last_scale_event_time"].(string)
 	if !ok {
-		return "", time.Now(), errors.New("Scale to zero status does not have last scale state time")
+		return "", time.Now(), errors.New("Scale to zero status does not have last scale event time")
 	}
 
-	lastScaleStateTime, err := time.Parse(time.RFC3339, lastScaleStateTimeString)
+	lastScaleEventTime, err := time.Parse(time.RFC3339, lastScaleEventTimeString)
 	if err != nil {
-		return "", time.Now(), errors.Wrap(err, "Failed to parse last scale state time")
+		return "", time.Now(), errors.Wrap(err, "Failed to parse last scale event time")
 	}
 
-	return lastScaleState, lastScaleStateTime, nil
+	return lastScaleEvent, lastScaleEventTime, nil
 }
 
-func (s *AppResourceScaler) parseLastScaleState(serviceStatus interface{}) (scaler_types.ScaleState, time.Time, error) {
+func (s *AppResourceScaler) parseLastScaleEvent(serviceStatus interface{}) (scaler_types.ScaleEvent, time.Time, error) {
 	serviceStatusMap, ok := serviceStatus.(map[string]interface{})
 	if !ok {
 		return "", time.Now(), errors.New("Service status type assertion failed")
@@ -394,15 +394,15 @@ func (s *AppResourceScaler) parseLastScaleState(serviceStatus interface{}) (scal
 	scaleToZeroStatus, ok := serviceStatusMap["scale_to_zero"].(map[string]interface{})
 	if !ok {
 		s.logger.DebugWith("Service does not have scale to zero status (it is ok), using defaults")
-		return scaler_types.NonScaleState, time.Now(), nil
+		return scaler_types.NonScaleEvent, time.Now(), nil
 	}
 
-	lastScaleState, lastScaleStateTime, err := s.parseScaleToZeroStatus(scaleToZeroStatus)
+	lastScaleEvent, lastScaleEventTime, err := s.parseScaleToZeroStatus(scaleToZeroStatus)
 	if err != nil {
 		return "", time.Now(), errors.Wrap(err, "Failed parsing scale to zero status")
 	}
 
-	return lastScaleState, lastScaleStateTime, nil
+	return lastScaleEvent, lastScaleEventTime, nil
 }
 
 func (s *AppResourceScaler) parseServiceState(serviceStatus interface{}) (string, error) {
