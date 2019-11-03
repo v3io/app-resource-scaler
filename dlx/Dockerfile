@@ -5,15 +5,18 @@
 FROM golang:1.10-alpine3.7 as builder
 
 RUN apk --update --no-cache add \
-git \
-gcc \
-musl-dev
+    git \
+    gcc \
+    musl-dev
 
 WORKDIR /go/src/github.com/v3io/app_resourcescaler
 
 COPY . .
 
-RUN go get github.com/v3io/scaler-types
+RUN go get github.com/v3io/scaler-types \
+    && cd $GOPATH/src/github.com/v3io/scaler-types \
+    && git checkout v1.1.0 \
+    && cd /go/src/github.com/v3io/app_resourcescaler
 
 RUN mkdir -p /home/app_resourcescaler/bin \
         && GOOS=linux GOARCH=amd64 go build -buildmode=plugin -a -installsuffix cgo -ldflags="-s -w" \
