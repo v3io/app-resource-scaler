@@ -256,10 +256,11 @@ func (s *AppResourceScaler) waitForNoProvisioningInProcess(namespace string) err
 			}
 
 			if state == "ready" || state == "error" {
+				s.logger.DebugWith("IguazioTenantAppServiceSet finished provisioning")
 				return nil
 			}
 
-			s.logger.DebugWith("IguazioTenantAppServiceSet is provisioning", "state", state)
+			s.logger.DebugWith("IguazioTenantAppServiceSet is still provisioning", "state", state)
 		}
 	}
 }
