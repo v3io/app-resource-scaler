@@ -64,7 +64,7 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 	for statusServiceName, serviceStatus := range statusServicesMap {
 
 		// Nuclio is a special service since it's a controller itself, so its scale to zero spec is configuring
-		// how and when it should scale its resources, and how and when we should scale him
+		// how and when it should scale its resources, and not how and when we should scale him
 		if statusServiceName == "nuclio" {
 			continue
 		}
