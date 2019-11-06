@@ -56,7 +56,7 @@ func (s *AppResourceScaler) SetScale(resource scaler_types.Resource, scale int) 
 func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 	resources := make([]scaler_types.Resource, 0)
 
-	specServicesMap, statusServicesMap, err := s.getIguazioTenantAppServiceSets()
+	specServicesMap, statusServicesMap, _, err := s.getIguazioTenantAppServiceSets()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get iguazio tenant app service sets")
 	}
@@ -64,7 +64,7 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 	for statusServiceName, serviceStatus := range statusServicesMap {
 
 		// Nuclio is a special service since it's a controller itself, so its scale to zero spec is configuring
-		// how and when it should scale its resources, and how and when we should scale him
+		// how and when it should scale its resources, and not how and when we should scale him
 		if statusServiceName == "nuclio" {
 			continue
 		}
@@ -129,7 +129,7 @@ func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName s
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
 		"path":  desiredStatePath,
-		"value": "scaledFromZero",
+		"value": "ready",
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
@@ -221,6 +221,11 @@ func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName str
 }
 
 func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, jsonPatchMapper []map[string]interface{}) error {
+	err := s.waitForNoProvisioningInProcess(namespace)
+	if err != nil {
+		return errors.Wrap(err, "Failed waiting for IguazioTenantAppServiceSet to finish provisioning")
+	}
+
 	body, err := json.Marshal(jsonPatchMapper)
 	s.logger.DebugWith("Patching iguazio tenant app service sets", "body", string(body))
 	if err != nil {
@@ -235,6 +240,31 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, j
 	return nil
 }
 
+func (s *AppResourceScaler) waitForNoProvisioningInProcess(namespace string) error {
+	s.logger.DebugWith("Waiting for service for IguazioTenantAppServiceSet to finish provisioning")
+	timeout := time.After(5 * time.Minute)
+	tick := time.Tick(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			return errors.New("Timed out waiting for IguazioTenantAppServiceSet to finish provisioning")
+		case <-tick:
+
+			_, _, state, err := s.getIguazioTenantAppServiceSets()
+			if err != nil {
+				return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
+			}
+
+			if state == "ready" || state == "error" {
+				s.logger.DebugWith("IguazioTenantAppServiceSet finished provisioning")
+				return nil
+			}
+
+			s.logger.DebugWith("IguazioTenantAppServiceSet is still provisioning", "state", state)
+		}
+	}
+}
+
 func (s *AppResourceScaler) waitForServiceState(namespace string, serviceName string, state string) error {
 	s.logger.DebugWith("Waiting for service to reach state", "serviceName", serviceName, "state", state)
 	timeout := time.After(5 * time.Minute)
@@ -245,7 +275,7 @@ func (s *AppResourceScaler) waitForServiceState(namespace string, serviceName st
 			return errors.New("Timed out waiting for service state")
 		case <-tick:
 
-			_, statusServicesMap, err := s.getIguazioTenantAppServiceSets()
+			_, statusServicesMap, _, err := s.getIguazioTenantAppServiceSets()
 			if err != nil {
 				return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
 			}
@@ -282,24 +312,27 @@ func getClientConfig(kubeconfigPath string) (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-func (s *AppResourceScaler) getIguazioTenantAppServiceSets() (map[string]interface{}, map[string]interface{}, error) {
+func (s *AppResourceScaler) getIguazioTenantAppServiceSets() (map[string]interface{}, map[string]interface{}, string, error) {
 	var iguazioTenantAppServicesSetMap map[string]interface{}
 
 	absPath := []string{"apis", "iguazio.com", "v1beta1", "namespaces", s.namespace, "iguaziotenantappservicesets", s.namespace}
 	iguazioTenantAppServicesSet, err := s.kubeClientSet.Discovery().RESTClient().Get().AbsPath(absPath...).Do().Raw()
 
 	if err != nil {
-		return map[string]interface{}{}, map[string]interface{}{}, errors.Wrap(err, "Failed to get iguazio tenant app service sets")
+		return map[string]interface{}{}, map[string]interface{}{}, "", errors.Wrap(err, "Failed to get iguazio tenant app service sets")
 	}
 
 	if err := json.Unmarshal(iguazioTenantAppServicesSet, &iguazioTenantAppServicesSetMap); err != nil {
-		return map[string]interface{}{}, map[string]interface{}{}, errors.Wrap(err, "Failed to unmarshal response")
+		return map[string]interface{}{}, map[string]interface{}{}, "", errors.Wrap(err, "Failed to unmarshal response")
 	}
 
-	statusServicesMap := s.parseStatusServices(iguazioTenantAppServicesSetMap)
+	statusServicesMap, state, err := s.parseStatus(iguazioTenantAppServicesSetMap)
+	if err != nil {
+		return map[string]interface{}{}, map[string]interface{}{}, "", errors.Wrap(err, "Failed to parse iguazio tenant app service sets status")
+	}
 	specServicesMap := s.parseSpecServices(iguazioTenantAppServicesSetMap)
 
-	return specServicesMap, statusServicesMap, nil
+	return specServicesMap, statusServicesMap, state, nil
 }
 
 func (s *AppResourceScaler) parseSpecServices(iguazioTenantAppServicesSetMap map[string]interface{}) map[string]interface{} {
@@ -344,21 +377,25 @@ func (s *AppResourceScaler) parseSpecServices(iguazioTenantAppServicesSetMap map
 	return servicesMap
 }
 
-func (s *AppResourceScaler) parseStatusServices(iguazioTenantAppServicesSetMap map[string]interface{}) map[string]interface{} {
+func (s *AppResourceScaler) parseStatus(iguazioTenantAppServicesSetMap map[string]interface{}) (map[string]interface{}, string, error) {
 	var servicesMap map[string]interface{}
 	status, ok := iguazioTenantAppServicesSetMap["status"].(map[string]interface{})
 	if !ok {
-		s.logger.WarnWith("Service set does not have status", "serviceSet", iguazioTenantAppServicesSetMap)
-		return servicesMap
+		return make(map[string]interface{}), "", errors.New("Service set does not have status")
+	}
+
+	state, ok := status["state"].(string)
+	if !ok {
+		return make(map[string]interface{}), "", errors.New("Status does not have state")
 	}
 
 	servicesMap, ok = status["services"].(map[string]interface{})
 	if !ok {
 		s.logger.WarnWith("Status does not have services", "status", status)
-		return servicesMap
+		return servicesMap, state, nil
 	}
 
-	return servicesMap
+	return servicesMap, state, nil
 }
 
 func (s *AppResourceScaler) parseScaleToZeroStatus(scaleToZeroStatus map[string]interface{}) (scaler_types.ScaleEvent, time.Time, error) {
