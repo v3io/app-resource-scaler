@@ -15,7 +15,7 @@ COPY . .
 
 RUN go get github.com/v3io/scaler-types \
     && cd $GOPATH/src/github.com/v3io/scaler-types \
-    && git checkout v1.1.0 \
+    && git checkout v1.2.0 \
     && cd /go/src/github.com/v3io/app_resourcescaler
 
 RUN mkdir -p /home/app_resourcescaler/bin \
@@ -30,6 +30,6 @@ WORKDIR /home/app_resourcescaler
 ENV PATH=/home/app_resourcescaler:$PATH
 
 COPY --from=builder /home/app_resourcescaler/plugins/plugin.so /home/app_resourcescaler/plugins/plugin.so
-COPY --from=quay.io/v3io/autoscaler:v0.1.0 /home/v3io/bin/autoscaler /home/app_resourcescaler/autoscaler
+COPY --from=quay.io/v3io/autoscaler:v0.1.1 /home/v3io/bin/autoscaler /home/app_resourcescaler/autoscaler
 
 CMD ["autoscaler"]
