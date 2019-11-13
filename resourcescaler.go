@@ -422,24 +422,23 @@ func (s *AppResourceScaler) parseScaleToZeroStatus(scaleToZeroStatus map[string]
 	return lastScaleEvent, lastScaleEventTime, nil
 }
 
-func (s *AppResourceScaler) parseLastScaleEvent(serviceStatus interface{}) (scaler_types.ScaleEvent, time.Time, error) {
+func (s *AppResourceScaler) parseLastScaleEvent(serviceStatus interface{}) (*scaler_types.ScaleEvent, *time.Time, error) {
 	serviceStatusMap, ok := serviceStatus.(map[string]interface{})
 	if !ok {
-		return "", time.Now(), errors.New("Service status type assertion failed")
+		return nil, nil, errors.New("Service status type assertion failed")
 	}
 
 	scaleToZeroStatus, ok := serviceStatusMap["scale_to_zero"].(map[string]interface{})
 	if !ok {
-		s.logger.DebugWith("Service does not have scale to zero status (it is ok), using defaults")
-		return scaler_types.NonScaleEvent, time.Now(), nil
+		return nil, nil, nil
 	}
 
 	lastScaleEvent, lastScaleEventTime, err := s.parseScaleToZeroStatus(scaleToZeroStatus)
 	if err != nil {
-		return "", time.Now(), errors.Wrap(err, "Failed parsing scale to zero status")
+		return nil, nil, errors.Wrap(err, "Failed parsing scale to zero status")
 	}
 
-	return lastScaleEvent, lastScaleEventTime, nil
+	return &lastScaleEvent, &lastScaleEventTime, nil
 }
 
 func (s *AppResourceScaler) parseServiceState(serviceStatus interface{}) (string, error) {
