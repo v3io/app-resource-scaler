@@ -241,7 +241,7 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, j
 }
 
 func (s *AppResourceScaler) waitForNoProvisioningInProcess(namespace string) error {
-	s.logger.DebugWith("Waiting for service for IguazioTenantAppServiceSet to finish provisioning")
+	s.logger.DebugWith("Waiting for IguazioTenantAppServiceSet to finish provisioning")
 	timeout := time.After(5 * time.Minute)
 	tick := time.Tick(10 * time.Second)
 	for {
