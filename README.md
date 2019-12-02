@@ -2,7 +2,7 @@
 
 This project serves as a plugin for the generic kubernetes resources 
 [scale to zero infrastructure](https://github.com/v3io/scaler). </br>
-Implements scaling of Iguazio's app services, by modifying the appropriate CRDs. 
+It implements scaling of Iguazio's app services, by modifying the appropriate CRDs. 
 
 ## Building the project
 
