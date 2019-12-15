@@ -330,16 +330,16 @@ func (s *AppResourceScaler) getIguazioTenantAppServiceSets() (map[string]interfa
 	iguazioTenantAppServicesSet, err := s.kubeClientSet.Discovery().RESTClient().Get().AbsPath(absPath...).Do().Raw()
 
 	if err != nil {
-		return map[string]interface{}{}, map[string]interface{}{}, "", errors.Wrap(err, "Failed to get iguazio tenant app service sets")
+		return nil, nil, "", errors.Wrap(err, "Failed to get iguazio tenant app service sets")
 	}
 
 	if err := json.Unmarshal(iguazioTenantAppServicesSet, &iguazioTenantAppServicesSetMap); err != nil {
-		return map[string]interface{}{}, map[string]interface{}{}, "", errors.Wrap(err, "Failed to unmarshal response")
+		return nil, nil, "", errors.Wrap(err, "Failed to unmarshal response")
 	}
 
 	statusServicesMap, state, err := s.parseStatus(iguazioTenantAppServicesSetMap)
 	if err != nil {
-		return map[string]interface{}{}, map[string]interface{}{}, "", errors.Wrap(err, "Failed to parse iguazio tenant app service sets status")
+		return nil, nil, "", errors.Wrap(err, "Failed to parse iguazio tenant app service sets status")
 	}
 	specServicesMap := s.parseSpecServices(iguazioTenantAppServicesSetMap)
 
@@ -392,12 +392,12 @@ func (s *AppResourceScaler) parseStatus(iguazioTenantAppServicesSetMap map[strin
 	var servicesMap map[string]interface{}
 	status, ok := iguazioTenantAppServicesSetMap["status"].(map[string]interface{})
 	if !ok {
-		return make(map[string]interface{}), "", errors.New("Service set does not have status")
+		return nil, "", errors.New("Service set does not have status")
 	}
 
 	state, ok := status["state"].(string)
 	if !ok {
-		return make(map[string]interface{}), "", errors.New("Status does not have state")
+		return nil, "", errors.New("Status does not have state")
 	}
 
 	servicesMap, ok = status["services"].(map[string]interface{})
@@ -470,55 +470,55 @@ func (s *AppResourceScaler) parseScaleResources(serviceSpecInterface interface{}
 	var parsedScaleResources []scaler_types.ScaleResource
 	serviceSpec, ok := serviceSpecInterface.(map[string]interface{})
 	if !ok {
-		return []scaler_types.ScaleResource{}, errors.New("Service spec type assertion failed")
+		return nil, errors.New("Service spec type assertion failed")
 	}
 
 	scaleToZeroSpec, ok := serviceSpec["scale_to_zero"].(map[string]interface{})
 	if !ok {
 
 		// It's ok for a service to not have the scale_to_zero spec
-		return []scaler_types.ScaleResource{}, nil
+		return nil, nil
 	}
 
 	scaleToZeroMode, ok := scaleToZeroSpec["mode"].(string)
 	if !ok {
-		return []scaler_types.ScaleResource{}, errors.New("Scale to zero spec does not have mode")
+		return nil, errors.New("Scale to zero spec does not have mode")
 	}
 
 	// if it's not enabled there's no reason to parse the rest
 	if scaleToZeroMode != "enabled" {
-		return []scaler_types.ScaleResource{}, nil
+		return nil, nil
 	}
 
 	scaleResourcesList, ok := scaleToZeroSpec["scale_resources"].([]interface{})
 	if !ok {
-		return []scaler_types.ScaleResource{}, errors.New("Scale to zero spec does not have scale resources")
+		return nil, errors.New("Scale to zero spec does not have scale resources")
 	}
 
 	for _, scaleResourceInterface := range scaleResourcesList {
 		scaleResource, ok := scaleResourceInterface.(map[string]interface{})
 		if !ok {
-			return []scaler_types.ScaleResource{}, errors.New("Scale resource type assertion failed")
+			return nil, errors.New("Scale resource type assertion failed")
 		}
 
 		metricName, ok := scaleResource["metric_name"].(string)
 		if !ok {
-			return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have metric name")
+			return nil, errors.New("Scale resource does not have metric name")
 		}
 
 		threshold, ok := scaleResource["threshold"].(float64)
 		if !ok {
-			return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have threshold")
+			return nil, errors.New("Scale resource does not have threshold")
 		}
 
 		windowSizeString, ok := scaleResource["window_size"].(string)
 		if !ok {
-			return []scaler_types.ScaleResource{}, errors.New("Scale resource does not have metric window size")
+			return nil, errors.New("Scale resource does not have metric window size")
 		}
 
 		windowSize, err := time.ParseDuration(windowSizeString)
 		if err != nil {
-			return []scaler_types.ScaleResource{}, errors.Wrap(err, "Failed to parse window size")
+			return nil, errors.Wrap(err, "Failed to parse window size")
 		}
 
 		parsedScaleResource := scaler_types.ScaleResource{
