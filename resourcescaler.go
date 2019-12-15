@@ -135,7 +135,7 @@ func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName s
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
 		"path":  markForRestartPath,
-		"value": "false",
+		"value": false,
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
@@ -193,7 +193,7 @@ func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName str
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
 		"path":  markForRestartPath,
-		"value": "false",
+		"value": false,
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
