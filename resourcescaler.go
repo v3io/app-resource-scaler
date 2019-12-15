@@ -302,7 +302,7 @@ func (s *AppResourceScaler) waitForServiceState(namespace string, serviceName st
 				}
 
 				if stateString == state {
-					s.logger.DebugWith("Service reached to state", "serviceName", serviceName, "state", state)
+					s.logger.InfoWith("Service reached to state", "serviceName", serviceName, "state", state)
 					return nil
 				}
 
