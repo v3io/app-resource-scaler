@@ -119,6 +119,7 @@ func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName s
 	var jsonPatchMapper []map[string]interface{}
 	s.logger.DebugWith("Scaling from zero", "namespace", namespace, "serviceName", serviceName)
 	desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
+	markForRestartPath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/mark_for_restart", string(serviceName))
 	scaleToZeroStatusPath := fmt.Sprintf("/status/services/%s/scale_to_zero", string(serviceName))
 	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event", string(serviceName))
 	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event_time", string(serviceName))
@@ -130,6 +131,11 @@ func (s *AppResourceScaler) scaleServiceFromZero(namespace string, serviceName s
 		"op":    "add",
 		"path":  desiredStatePath,
 		"value": "ready",
+	})
+	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
+		"op":    "add",
+		"path":  markForRestartPath,
+		"value": "false",
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
@@ -171,6 +177,7 @@ func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName str
 	var jsonPatchMapper []map[string]interface{}
 	s.logger.DebugWith("Scaling to zero", "namespace", namespace, "serviceName", serviceName)
 	desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
+	markForRestartPath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/mark_for_restart", string(serviceName))
 	scaleToZeroStatusPath := fmt.Sprintf("/status/services/%s/scale_to_zero", string(serviceName))
 	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event", string(serviceName))
 	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event_time", string(serviceName))
@@ -183,7 +190,11 @@ func (s *AppResourceScaler) scaleServiceToZero(namespace string, serviceName str
 		"path":  desiredStatePath,
 		"value": "scaledToZero",
 	})
-
+	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
+		"op":    "add",
+		"path":  markForRestartPath,
+		"value": "false",
+	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
 		"path":  "/status/state",
