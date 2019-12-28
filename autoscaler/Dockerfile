@@ -15,7 +15,7 @@ COPY . .
 
 RUN go get github.com/v3io/scaler-types \
     && cd $GOPATH/src/github.com/v3io/scaler-types \
-    && git checkout v1.3.0 \
+    && git checkout v1.4.0 \
     && cd /go/src/github.com/v3io/app_resourcescaler
 
 RUN mkdir -p /home/app_resourcescaler/bin \
