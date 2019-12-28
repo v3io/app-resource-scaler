@@ -318,7 +318,7 @@ func (s *AppResourceScaler) waitForServicesState(namespace string, serviceNames 
 				}
 
 				s.logger.DebugWith("Service reached desired state", "serviceName", serviceName, "desiredState", desiredState)
-				removeStringFromSlice(serviceName, servicesToCheck)
+				servicesToCheck = removeStringFromSlice(serviceName, servicesToCheck)
 
 				if len(servicesToCheck) == 0 {
 					return nil
