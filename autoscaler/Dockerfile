@@ -30,6 +30,6 @@ WORKDIR /home/app_resourcescaler
 ENV PATH=/home/app_resourcescaler:$PATH
 
 COPY --from=builder /home/app_resourcescaler/plugins/plugin.so /home/app_resourcescaler/plugins/plugin.so
-COPY --from=quay.io/v3io/autoscaler:v0.1.2 /home/v3io/bin/autoscaler /home/app_resourcescaler/autoscaler
+COPY --from=quay.io/v3io/autoscaler:v0.2.0 /home/v3io/bin/autoscaler /home/app_resourcescaler/autoscaler
 
 CMD ["autoscaler"]

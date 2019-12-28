@@ -30,6 +30,6 @@ WORKDIR /home/app_resourcescaler
 ENV PATH=/home/app_resourcescaler:$PATH
 
 COPY --from=builder /home/app_resourcescaler/plugins/plugin.so /home/app_resourcescaler/plugins/plugin.so
-COPY --from=quay.io/v3io/dlx:v0.1.2 /home/v3io/bin/dlx /home/app_resourcescaler/dlx
+COPY --from=quay.io/v3io/dlx:v0.2.0 /home/v3io/bin/dlx /home/app_resourcescaler/dlx
 
 CMD ["dlx"]
