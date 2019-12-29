@@ -524,7 +524,7 @@ func (s *AppResourceScaler) parseScaleResources(serviceSpecInterface interface{}
 
 		parsedScaleResource := scaler_types.ScaleResource{
 			MetricName: metricName,
-			WindowSize: windowSize,
+			WindowSize: scaler_types.Duration{Duration: windowSize},
 			Threshold:  int(threshold),
 		}
 
