@@ -562,6 +562,5 @@ func stringSliceContainsString(slice []string, str string) bool {
 			return true
 		}
 	}
-
 	return false
 }
