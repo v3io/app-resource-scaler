@@ -127,43 +127,16 @@ func (s *AppResourceScaler) scaleServicesFromZero(namespace string, serviceNames
 		return errors.Wrap(err, "Failed to marshal time")
 	}
 	for _, serviceName := range serviceNames {
-		desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
-		markForRestartPath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/mark_for_restart", string(serviceName))
-		scaleToZeroStatusPath := fmt.Sprintf("/status/services/%s/scale_to_zero", string(serviceName))
-		lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event", string(serviceName))
-		lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event_time", string(serviceName))
-		jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-			"op":    "add",
-			"path":  desiredStatePath,
-			"value": "ready",
-		})
-		jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-			"op":    "add",
-			"path":  markForRestartPath,
-			"value": false,
-		})
-		jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-			"op":    "add",
-			"path":  scaleToZeroStatusPath,
-			"value": map[string]interface{}{},
-		})
-		jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-			"op":    "add",
-			"path":  lastScaleStatePath,
-			"value": string(scaler_types.ScaleFromZeroStartedScaleEvent),
-		})
-		jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-			"op":    "add",
-			"path":  lastScaleStateTimePath,
-			"value": string(marshaledTime),
-		})
+		jsonPatchMapper, err = s.appendServiceStateChangeJsonPatchOperations(jsonPatchMapper,
+			serviceName,
+			"ready",
+			scaler_types.ScaleFromZeroStartedScaleEvent,
+			marshaledTime)
+		if err != nil {
+			return errors.Wrap(err, "Failed appending service state change json patch operations")
+		}
 	}
 
-	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-		"op":    "add",
-		"path":  "/status/state",
-		"value": "waitingForProvisioning",
-	})
 	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
 
 	if err != nil {
@@ -187,43 +160,17 @@ func (s *AppResourceScaler) scaleServicesToZero(namespace string, serviceNames [
 		return errors.Wrap(err, "Failed to marshal time")
 	}
 	for _, serviceName := range serviceNames {
-		desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
-		markForRestartPath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/mark_for_restart", string(serviceName))
-		scaleToZeroStatusPath := fmt.Sprintf("/status/services/%s/scale_to_zero", string(serviceName))
-		lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event", string(serviceName))
-		lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event_time", string(serviceName))
-		jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-			"op":    "add",
-			"path":  desiredStatePath,
-			"value": "scaledToZero",
-		})
-		jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-			"op":    "add",
-			"path":  markForRestartPath,
-			"value": false,
-		})
-		jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-			"op":    "add",
-			"path":  scaleToZeroStatusPath,
-			"value": map[string]interface{}{},
-		})
-		jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-			"op":    "add",
-			"path":  lastScaleStatePath,
-			"value": string(scaler_types.ScaleToZeroStartedScaleEvent),
-		})
-		jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-			"op":    "add",
-			"path":  lastScaleStateTimePath,
-			"value": string(marshaledTime),
-		})
+
+		jsonPatchMapper, err = s.appendServiceStateChangeJsonPatchOperations(jsonPatchMapper,
+			serviceName,
+			"scaledToZero",
+			scaler_types.ScaleToZeroStartedScaleEvent,
+			marshaledTime)
+		if err != nil {
+			return errors.Wrap(err, "Failed appending service state change json patch operations")
+		}
 	}
 
-	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-		"op":    "add",
-		"path":  "/status/state",
-		"value": "waitingForProvisioning",
-	})
 	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
 
 	if err != nil {
@@ -239,7 +186,48 @@ func (s *AppResourceScaler) scaleServicesToZero(namespace string, serviceNames [
 	return nil
 }
 
+func (s *AppResourceScaler) appendServiceStateChangeJsonPatchOperations(jsonPatchMapper []map[string]interface{}, serviceName string, desiredState string, scaleEvent scaler_types.ScaleEvent, marshaledTime []byte) ([]map[string]interface{}, error) {
+	desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", string(serviceName))
+	markForRestartPath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/mark_for_restart", string(serviceName))
+	scaleToZeroStatusPath := fmt.Sprintf("/status/services/%s/scale_to_zero", string(serviceName))
+	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event", string(serviceName))
+	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event_time", string(serviceName))
+	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
+		"op":    "add",
+		"path":  desiredStatePath,
+		"value": desiredState,
+	})
+	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
+		"op":    "add",
+		"path":  markForRestartPath,
+		"value": false,
+	})
+	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
+		"op":    "add",
+		"path":  scaleToZeroStatusPath,
+		"value": map[string]interface{}{},
+	})
+	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
+		"op":    "add",
+		"path":  lastScaleStatePath,
+		"value": string(scaleEvent),
+	})
+	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
+		"op":    "add",
+		"path":  lastScaleStateTimePath,
+		"value": string(marshaledTime),
+	})
+
+	return jsonPatchMapper, nil
+}
+
 func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, jsonPatchMapper []map[string]interface{}) error {
+	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
+		"op":    "add",
+		"path":  "/status/state",
+		"value": "waitingForProvisioning",
+	})
+
 	err := s.waitForNoProvisioningInProcess(namespace)
 	if err != nil {
 		return errors.Wrap(err, "Failed waiting for IguazioTenantAppServiceSet to finish provisioning")
