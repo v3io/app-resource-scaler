@@ -252,22 +252,23 @@ func (s *AppResourceScaler) waitForNoProvisioningInProcess(namespace string) err
 	timeout := time.After(5 * time.Minute)
 	tick := time.Tick(10 * time.Second)
 	for {
+		_, _, state, err := s.getIguazioTenantAppServiceSets()
+		if err != nil {
+			return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
+		}
+
+		if state == "ready" || state == "error" {
+			s.logger.DebugWith("IguazioTenantAppServiceSet finished provisioning")
+			return nil
+		}
+
+		s.logger.DebugWith("IguazioTenantAppServiceSet is still provisioning", "state", state)
+
 		select {
 		case <-timeout:
 			return errors.New("Timed out waiting for IguazioTenantAppServiceSet to finish provisioning")
 		case <-tick:
-
-			_, _, state, err := s.getIguazioTenantAppServiceSets()
-			if err != nil {
-				return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
-			}
-
-			if state == "ready" || state == "error" {
-				s.logger.DebugWith("IguazioTenantAppServiceSet finished provisioning")
-				return nil
-			}
-
-			s.logger.DebugWith("IguazioTenantAppServiceSet is still provisioning", "state", state)
+			continue
 		}
 	}
 }
