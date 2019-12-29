@@ -552,7 +552,6 @@ func removeStringFromSlice(someString string, slice []string) []string {
 		if item != someString {
 			newSlice = append(newSlice, item)
 		}
-
 	}
 	return newSlice
 }
