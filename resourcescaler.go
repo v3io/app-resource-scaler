@@ -137,7 +137,7 @@ func (s *AppResourceScaler) scaleServicesFromZero(namespace string, serviceNames
 		}
 	}
 
-	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
+	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper, true)
 
 	if err != nil {
 		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
@@ -171,7 +171,7 @@ func (s *AppResourceScaler) scaleServicesToZero(namespace string, serviceNames [
 		}
 	}
 
-	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
+	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper, false)
 
 	if err != nil {
 		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
@@ -221,11 +221,18 @@ func (s *AppResourceScaler) appendServiceStateChangeJsonPatchOperations(jsonPatc
 	return jsonPatchMapper, nil
 }
 
-func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, jsonPatchMapper []map[string]interface{}) error {
+func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, jsonPatchMapper []map[string]interface{}, isScaleFromZeroOnly bool) error {
+	var state string
+	if isScaleFromZeroOnly {
+		state = "waitingForScalingFromZero"
+	} else {
+		state = "waitingForProvisioning"
+	}
+
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
 		"path":  "/status/state",
-		"value": "waitingForScalingFromZero",
+		"value": state,
 	})
 
 	err := s.waitForNoProvisioningInProcess(namespace)
