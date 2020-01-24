@@ -225,7 +225,7 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, j
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
 		"path":  "/status/state",
-		"value": "waitingForScalingUpFromZero",
+		"value": "waitingForScalingFromZero",
 	})
 
 	err := s.waitForNoProvisioningInProcess(namespace)
