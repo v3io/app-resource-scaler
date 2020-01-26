@@ -16,6 +16,13 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+type ProvisioningState string
+
+const (
+	defaultProvisioningState       ProvisioningState = "waitingForProvisioning"
+	scaleFromZeroProvisioningState ProvisioningState = "waitingForScalingFromZero"
+)
+
 type AppResourceScaler struct {
 	logger        logger.Logger
 	namespace     string
@@ -137,7 +144,7 @@ func (s *AppResourceScaler) scaleServicesFromZero(namespace string, serviceNames
 		}
 	}
 
-	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
+	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper, scaleFromZeroProvisioningState)
 
 	if err != nil {
 		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
@@ -171,7 +178,7 @@ func (s *AppResourceScaler) scaleServicesToZero(namespace string, serviceNames [
 		}
 	}
 
-	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper)
+	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper, defaultProvisioningState)
 
 	if err != nil {
 		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
@@ -221,11 +228,11 @@ func (s *AppResourceScaler) appendServiceStateChangeJsonPatchOperations(jsonPatc
 	return jsonPatchMapper, nil
 }
 
-func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, jsonPatchMapper []map[string]interface{}) error {
+func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, jsonPatchMapper []map[string]interface{}, provisioningState ProvisioningState) error {
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
 		"path":  "/status/state",
-		"value": "waitingForProvisioning",
+		"value": string(provisioningState),
 	})
 
 	err := s.waitForNoProvisioningInProcess(namespace)
