@@ -21,6 +21,7 @@ type ProvisioningState string
 const (
 	defaultProvisioningState       ProvisioningState = "waitingForProvisioning"
 	scaleFromZeroProvisioningState ProvisioningState = "waitingForScalingFromZero"
+	scaleToZeroProvisioningState   ProvisioningState = "waitingForScalingToZero"
 )
 
 type AppResourceScaler struct {
@@ -178,7 +179,7 @@ func (s *AppResourceScaler) scaleServicesToZero(namespace string, serviceNames [
 		}
 	}
 
-	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper, defaultProvisioningState)
+	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper, scaleToZeroProvisioningState)
 
 	if err != nil {
 		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
