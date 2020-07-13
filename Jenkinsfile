@@ -22,14 +22,14 @@ podTemplate(label: "${git_project}-${label}", inheritFrom: "jnlp-docker") {
                     stage("build ${git_project} in dood") {
                         container('docker-cmd') {
                             dir("${github.BUILD_FOLDER}/src/github.com/${git_project_upstream_user}/${git_project}") {
-                                sh("SCALER_TAG=${DOCKER_TAG_VERSION} SCALER_REPOSITORY='' make build")
+                                sh("SCALER_TAG=${github.DOCKER_TAG_VERSION} SCALER_REPOSITORY='' make build")
                             }
                         }
                     }
 
                     stage('push') {
                         container('docker-cmd') {
-                            dockerx.images_push_multi_registries(["autoscaler:${DOCKER_TAG_VERSION}", "dlx:${DOCKER_TAG_VERSION}"], multi_credentials)
+                            dockerx.images_push_multi_registries(["autoscaler:${github.DOCKER_TAG_VERSION}", "dlx:${github.DOCKER_TAG_VERSION}"], multi_credentials)
                         }
                     }
                 }
