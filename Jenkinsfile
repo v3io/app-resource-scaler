@@ -1,7 +1,7 @@
 label = "${UUID.randomUUID().toString()}"
 git_project = "app-resource-scaler"
 git_project_user = "v3io"
-git_project_upstream_user = "iguazio"
+git_project_upstream_user = "v3io"
 git_deploy_user = "iguazio-prod-git-user"
 git_deploy_user_token = "iguazio-prod-git-user-token"
 git_deploy_user_private_key = "iguazio-prod-git-user-private-key"
