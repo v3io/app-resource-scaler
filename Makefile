@@ -2,6 +2,7 @@ SCALER_TAG ?= unstable
 SCALER_REPOSITORY ?= iguazio/
 
 GOPATH ?= $(shell go env GOPATH)
+OS_NAME = $(shell uname)
 
 ensure-gopath:
 ifndef GOPATH
