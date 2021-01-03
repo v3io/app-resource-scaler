@@ -46,7 +46,6 @@ lint: modules
 	  	(curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.33.0)
 
 	@echo Verifying imports...
-
 	$(GOPATH)/bin/impi \
 		--local github.com/v3io/app-resource-scaler/ \
 		--scheme stdLocalThirdParty \
