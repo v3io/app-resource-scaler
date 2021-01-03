@@ -48,6 +48,8 @@ lint: modules
 
 	@echo IMPI is at $(shell echo "$$GOPATH/bin/impi")
 
+	@echo IMPI contents $(shell cat "$$GOPATH/bin/impi")
+
 	$(GOPATH)/bin/impi \
 		--local github.com/v3io/app-resource-scaler/ \
 		--scheme stdLocalThirdParty \
