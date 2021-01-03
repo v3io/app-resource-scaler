@@ -47,10 +47,6 @@ lint: modules
 
 	@echo Verifying imports...
 
-	@echo IMPI is at $(shell echo "$$GOPATH/bin/impi")
-
-	@echo IMPI contents $(shell stat "$$GOPATH/bin/impi")
-
 	$(GOPATH)/bin/impi \
 		--local github.com/v3io/app-resource-scaler/ \
 		--scheme stdLocalThirdParty \
