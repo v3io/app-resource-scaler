@@ -9,19 +9,16 @@ RUN apk --update --no-cache add \
     gcc \
     musl-dev
 
-WORKDIR /go/src/github.com/v3io/app_resourcescaler
+WORKDIR /app_resourcescaler
 
 COPY . .
 
-RUN go get github.com/v3io/scaler-types \
-    && cd $GOPATH/src/github.com/v3io/scaler-types \
-    && git checkout v1.7.0 \
-    && cd /go/src/github.com/v3io/app_resourcescaler
+RUN go mod download
 
 RUN mkdir -p /home/app_resourcescaler/bin \
         && GOOS=linux GOARCH=amd64 go build -buildmode=plugin -a -installsuffix cgo -ldflags="-s -w" \
         -o /home/app_resourcescaler/plugins/plugin.so ./resourcescaler.go \
-        && rm -rf /go/src/github.com/v3io/app_resourcescaler
+        && rm -rf /app_resourcescaler
 
 FROM alpine:3.11
 
