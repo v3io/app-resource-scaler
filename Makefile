@@ -1,6 +1,14 @@
 SCALER_TAG ?= unstable
 SCALER_REPOSITORY ?= iguazio/
 
+GOPATH ?= $(shell go env GOPATH)
+OS_NAME = $(shell uname)
+
+ensure-gopath:
+ifndef GOPATH
+	$(error GOPATH must be set)
+endif
+
 .PHONY: build
 build: dlx autoscaler
 	@echo Done.
@@ -14,7 +22,7 @@ autoscaler:
 	docker build -f autoscaler/Dockerfile --tag=$(SCALER_REPOSITORY)autoscaler:$(SCALER_TAG) .
 
 .PHONY: modules
-modules:
+modules: ensure-gopath
 	@echo Getting go modules
 	@go mod download
 
