@@ -21,7 +21,11 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Lint
-        run: make lint
+
+        # remove impi if exists so it's installed each time
+        run: |
+          rm $GOPATH/bin/impi
+          make lint
 
   build:
     name: Build docker images
