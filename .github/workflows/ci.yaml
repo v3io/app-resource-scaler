@@ -28,7 +28,7 @@ jobs:
 
         # remove impi if exists so it's installed each time
         run: |
-          rm $GOPATH/bin/impi
+          rm -f $GOPATH/bin/impi
           make lint
 
   build:
