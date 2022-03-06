@@ -210,6 +210,9 @@ func (s *AppResourceScaler) appendServiceStateChangeJSONPatchOperations(jsonPatc
 
 	desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", serviceName)
 	markForRestartPath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/mark_for_restart", serviceName)
+
+	// Added To signal Provazio controller to apply the changes
+	markAsChangedPath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/mark_as_changed", serviceName)
 	scaleToZeroStatusPath := fmt.Sprintf("/status/services/%s/scale_to_zero", serviceName)
 	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event", serviceName)
 	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event_time", serviceName)
@@ -222,6 +225,11 @@ func (s *AppResourceScaler) appendServiceStateChangeJSONPatchOperations(jsonPatc
 		"op":    "add",
 		"path":  markForRestartPath,
 		"value": false,
+	})
+	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
+		"op":    "add",
+		"path":  markAsChangedPath,
+		"value": true,
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
