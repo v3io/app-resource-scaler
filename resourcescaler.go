@@ -122,7 +122,9 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 		}
 	}
 
-	s.logger.DebugWith("Found services", "services", resources)
+	if len(resources) != 0 {
+		s.logger.DebugWith("Found services", "services", resources)
+	}
 
 	return resources, nil
 }
