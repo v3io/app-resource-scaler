@@ -2,7 +2,7 @@
 # Build stage: builds the dlx binary
 #
 
-FROM golang:1.14.3-alpine3.11 as builder
+FROM gcr.io/iguazio/golang:1.17-alpine3.15 as builder
 
 RUN apk --update --no-cache add \
     git \
