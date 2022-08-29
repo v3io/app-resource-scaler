@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"github.com/nuclio/logger"
 	"github.com/nuclio/zap"
 	"github.com/v3io/scaler-types"
-	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -147,7 +147,7 @@ func (s *AppResourceScaler) ResolveServiceName(resource scaler_types.Resource) (
 
 func (s *AppResourceScaler) scaleServicesFromZero(ctx context.Context, namespace string, serviceNames []string) error {
 	var jsonPatchMapper []map[string]interface{}
-	s.logger.DebugWith("Scaling from zero", "namespace", namespace, "serviceNames", serviceNames)
+	s.logger.DebugWithCtx(ctx, "Scaling from zero", "namespace", namespace, "serviceNames", serviceNames)
 	marshaledTime, err := time.Now().MarshalText()
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal time")
@@ -277,7 +277,7 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(ctx context.Context
 		return errors.Wrap(err, "Could not marshal json patch mapper")
 	}
 
-	s.logger.DebugWith("Patching iguazio tenant app service sets", "body", string(body))
+	s.logger.DebugWithCtx(ctx, "Patching iguazio tenant app service sets", "body", string(body))
 	absPath := []string{"apis", "iguazio.com", "v1beta1", "namespaces", namespace, "iguaziotenantappservicesets", namespace}
 	if _, err := s.kubeClientSet.
 		Discovery().
@@ -351,14 +351,16 @@ func (s *AppResourceScaler) waitForServicesState(ctx context.Context, serviceNam
 				}
 
 				if currentState != desiredState {
-					s.logger.DebugWithCtx(ctx, "Service did not reach desired state yet",
+					s.logger.DebugWithCtx(ctx,
+						"Service did not reach desired state yet",
 						"serviceName", serviceName,
 						"currentState", currentState,
 						"desiredState", desiredState)
 					break
 				}
 
-				s.logger.DebugWithCtx(ctx, "Service reached desired state",
+				s.logger.DebugWithCtx(ctx,
+					"Service reached desired state",
 					"serviceName", serviceName,
 					"desiredState", desiredState)
 				servicesToCheck = removeStringFromSlice(serviceName, servicesToCheck)
