@@ -16,7 +16,8 @@
 # Build stage: builds the autoscaler binary
 #
 
-FROM golang:1.14.3-alpine3.11 as builder
+ARG V3IO_SCALER_TAG
+FROM gcr.io/iguazio/golang:1.17-alpine3.15 as builder
 
 RUN apk --update --no-cache add \
     git \
@@ -25,14 +26,18 @@ RUN apk --update --no-cache add \
 
 WORKDIR /app_resourcescaler
 
-COPY . .
+COPY go.mod go.sum ./
 
 RUN go mod download
+
+COPY . .
 
 RUN mkdir -p /home/app_resourcescaler/bin \
         && GOOS=linux GOARCH=amd64 go build -buildmode=plugin -a -installsuffix cgo -ldflags="-s -w" \
         -o /home/app_resourcescaler/plugins/plugin.so ./resourcescaler.go \
         && rm -rf /app_resourcescaler
+
+FROM quay.io/v3io/autoscaler:$V3IO_SCALER_TAG as source
 
 FROM gcr.io/iguazio/alpine:3.16
 
@@ -41,6 +46,6 @@ WORKDIR /home/app_resourcescaler
 ENV PATH=/home/app_resourcescaler:$PATH
 
 COPY --from=builder /home/app_resourcescaler/plugins/plugin.so /home/app_resourcescaler/plugins/plugin.so
-COPY --from=quay.io/v3io/autoscaler:v0.4.3 /home/v3io/bin/autoscaler /home/app_resourcescaler/autoscaler
+COPY --from=source /home/v3io/bin/autoscaler /home/app_resourcescaler/autoscaler
 
 CMD ["autoscaler"]

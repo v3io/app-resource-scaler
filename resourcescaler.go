@@ -20,6 +20,7 @@ such restriction.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -77,21 +78,28 @@ func New(kubeconfigPath string, namespace string) (scaler_types.ResourceScaler, 
 	}, nil
 }
 
+// SetScale scales a service
+// Deprecated, use  SetScaleCtx instead
 func (s *AppResourceScaler) SetScale(resources []scaler_types.Resource, scale int) error {
+	return s.SetScaleCtx(context.Background(), resources, scale)
+}
+
+// SetScaleCtx scales a service
+func (s *AppResourceScaler) SetScaleCtx(ctx context.Context, resources []scaler_types.Resource, scale int) error {
 	serviceNames := make([]string, 0)
 	for _, resource := range resources {
 		serviceNames = append(serviceNames, resource.Name)
 	}
 	if scale == 0 {
-		return s.scaleServicesToZero(s.namespace, serviceNames)
+		return s.scaleServicesToZero(ctx, s.namespace, serviceNames)
 	}
-	return s.scaleServicesFromZero(s.namespace, serviceNames)
+	return s.scaleServicesFromZero(ctx, s.namespace, serviceNames)
 }
 
 func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 	resources := make([]scaler_types.Resource, 0)
 
-	specServicesMap, statusServicesMap, _, err := s.getIguazioTenantAppServiceSets()
+	specServicesMap, statusServicesMap, _, err := s.getIguazioTenantAppServiceSets(context.Background())
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get iguazio tenant app service sets")
 	}
@@ -156,9 +164,9 @@ func (s *AppResourceScaler) ResolveServiceName(resource scaler_types.Resource) (
 	return resource.Name, nil
 }
 
-func (s *AppResourceScaler) scaleServicesFromZero(namespace string, serviceNames []string) error {
+func (s *AppResourceScaler) scaleServicesFromZero(ctx context.Context, namespace string, serviceNames []string) error {
 	var jsonPatchMapper []map[string]interface{}
-	s.logger.DebugWith("Scaling from zero", "namespace", namespace, "serviceNames", serviceNames)
+	s.logger.DebugWithCtx(ctx, "Scaling from zero", "namespace", namespace, "serviceNames", serviceNames)
 	marshaledTime, err := time.Now().MarshalText()
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal time")
@@ -174,24 +182,23 @@ func (s *AppResourceScaler) scaleServicesFromZero(namespace string, serviceNames
 		}
 	}
 
-	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper, scaleFromZeroProvisioningState)
-
-	if err != nil {
+	if err := s.patchIguazioTenantAppServiceSets(ctx,
+		namespace,
+		jsonPatchMapper,
+		scaleFromZeroProvisioningState); err != nil {
 		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
 	}
 
-	err = s.waitForServicesState(namespace, serviceNames, "ready")
-
-	if err != nil {
+	if err := s.waitForServicesState(ctx, serviceNames, "ready"); err != nil {
 		return errors.Wrap(err, "Failed to wait for services readiness")
 	}
 
 	return nil
 }
 
-func (s *AppResourceScaler) scaleServicesToZero(namespace string, serviceNames []string) error {
+func (s *AppResourceScaler) scaleServicesToZero(ctx context.Context, namespace string, serviceNames []string) error {
 	var jsonPatchMapper []map[string]interface{}
-	s.logger.DebugWith("Scaling to zero", "namespace", namespace, "serviceNames", serviceNames)
+	s.logger.DebugWithCtx(ctx, "Scaling to zero", "namespace", namespace, "serviceNames", serviceNames)
 	marshaledTime, err := time.Now().MarshalText()
 	if err != nil {
 		return errors.Wrap(err, "Failed to marshal time")
@@ -208,15 +215,14 @@ func (s *AppResourceScaler) scaleServicesToZero(namespace string, serviceNames [
 		}
 	}
 
-	err = s.patchIguazioTenantAppServiceSets(namespace, jsonPatchMapper, scaleToZeroProvisioningState)
-
-	if err != nil {
+	if err := s.patchIguazioTenantAppServiceSets(ctx,
+		namespace,
+		jsonPatchMapper,
+		scaleToZeroProvisioningState); err != nil {
 		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
 	}
 
-	err = s.waitForServicesState(namespace, serviceNames, "scaledToZero")
-
-	if err != nil {
+	if err := s.waitForServicesState(ctx, serviceNames, "scaledToZero"); err != nil {
 		return errors.Wrap(err, "Failed to wait for services to scale to zero")
 	}
 
@@ -271,50 +277,60 @@ func (s *AppResourceScaler) appendServiceStateChangeJSONPatchOperations(jsonPatc
 	return jsonPatchMapper, nil
 }
 
-func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(namespace string, jsonPatchMapper []map[string]interface{}, provisioningState ProvisioningState) error {
+func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(ctx context.Context,
+	namespace string,
+	jsonPatchMapper []map[string]interface{},
+	provisioningState ProvisioningState) error {
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
 		"op":    "add",
 		"path":  "/status/state",
 		"value": string(provisioningState),
 	})
 
-	err := s.waitForNoProvisioningInProcess(namespace)
-	if err != nil {
+	if err := s.waitForNoProvisioningInProcess(ctx); err != nil {
 		return errors.Wrap(err, "Failed waiting for IguazioTenantAppServiceSet to finish provisioning")
 	}
 
 	body, err := json.Marshal(jsonPatchMapper)
-	s.logger.DebugWith("Patching iguazio tenant app service sets", "body", string(body))
 	if err != nil {
 		return errors.Wrap(err, "Could not marshal json patch mapper")
 	}
 
+	s.logger.DebugWithCtx(ctx, "Patching iguazio tenant app service sets", "body", string(body))
 	absPath := []string{"apis", "iguazio.com", "v1beta1", "namespaces", namespace, "iguaziotenantappservicesets", namespace}
-	_, err = s.kubeClientSet.Discovery().RESTClient().Patch(types.JSONPatchType).Body(body).AbsPath(absPath...).Do().Raw()
-	if err != nil {
+	if _, err := s.kubeClientSet.
+		Discovery().
+		RESTClient().
+		Patch(types.JSONPatchType).
+		Body(body).
+		AbsPath(absPath...).
+		Do(ctx).
+		Raw(); err != nil {
 		return errors.Wrap(err, "Failed to patch iguazio tenant app service sets")
 	}
 	return nil
 }
 
-func (s *AppResourceScaler) waitForNoProvisioningInProcess(namespace string) error {
-	s.logger.DebugWith("Waiting for IguazioTenantAppServiceSet to finish provisioning")
+func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) error {
+	s.logger.DebugWithCtx(ctx, "Waiting for IguazioTenantAppServiceSet to finish provisioning")
 	timeout := time.After(5 * time.Minute)
 	tick := time.Tick(10 * time.Second)
 	for {
-		_, _, state, err := s.getIguazioTenantAppServiceSets()
+		_, _, state, err := s.getIguazioTenantAppServiceSets(ctx)
 		if err != nil {
 			return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
 		}
 
 		if state == "ready" || state == "error" {
-			s.logger.DebugWith("IguazioTenantAppServiceSet finished provisioning")
+			s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet finished provisioning")
 			return nil
 		}
 
-		s.logger.DebugWith("IguazioTenantAppServiceSet is still provisioning", "state", state)
+		s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet is still provisioning", "state", state)
 
 		select {
+		case <-ctx.Done():
+			return errors.New("Context was cancelled")
 		case <-timeout:
 			return errors.New("Timed out waiting for IguazioTenantAppServiceSet to finish provisioning")
 		case <-tick:
@@ -323,17 +339,22 @@ func (s *AppResourceScaler) waitForNoProvisioningInProcess(namespace string) err
 	}
 }
 
-func (s *AppResourceScaler) waitForServicesState(namespace string, serviceNames []string, desiredState string) error {
-	s.logger.DebugWith("Waiting for services to reach desired state", "serviceNames", serviceNames, "desiredState", desiredState)
+func (s *AppResourceScaler) waitForServicesState(ctx context.Context, serviceNames []string, desiredState string) error {
+	s.logger.DebugWithCtx(ctx,
+		"Waiting for services to reach desired state",
+		"serviceNames", serviceNames,
+		"desiredState", desiredState)
 	timeout := time.After(10 * time.Minute)
 	tick := time.Tick(5 * time.Second)
 	for {
 		select {
+		case <-ctx.Done():
+			return errors.New("Context was cancelled")
 		case <-timeout:
 			return errors.New("Timed out waiting for services to reach desired state")
 		case <-tick:
 			servicesToCheck := append([]string(nil), serviceNames...)
-			_, statusServicesMap, _, err := s.getIguazioTenantAppServiceSets()
+			_, statusServicesMap, _, err := s.getIguazioTenantAppServiceSets(ctx)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
 			}
@@ -349,14 +370,18 @@ func (s *AppResourceScaler) waitForServicesState(namespace string, serviceNames 
 				}
 
 				if currentState != desiredState {
-					s.logger.DebugWith("Service did not reach desired state yet",
+					s.logger.DebugWithCtx(ctx,
+						"Service did not reach desired state yet",
 						"serviceName", serviceName,
 						"currentState", currentState,
 						"desiredState", desiredState)
 					break
 				}
 
-				s.logger.DebugWith("Service reached desired state", "serviceName", serviceName, "desiredState", desiredState)
+				s.logger.DebugWithCtx(ctx,
+					"Service reached desired state",
+					"serviceName", serviceName,
+					"desiredState", desiredState)
 				servicesToCheck = removeStringFromSlice(serviceName, servicesToCheck)
 
 				if len(servicesToCheck) == 0 {
@@ -375,11 +400,18 @@ func getClientConfig(kubeconfigPath string) (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-func (s *AppResourceScaler) getIguazioTenantAppServiceSets() (map[string]interface{}, map[string]interface{}, string, error) {
+func (s *AppResourceScaler) getIguazioTenantAppServiceSets(ctx context.Context) (
+	map[string]interface{}, map[string]interface{}, string, error) {
 	var iguazioTenantAppServicesSetMap map[string]interface{}
 
 	absPath := []string{"apis", "iguazio.com", "v1beta1", "namespaces", s.namespace, "iguaziotenantappservicesets", s.namespace}
-	iguazioTenantAppServicesSet, err := s.kubeClientSet.Discovery().RESTClient().Get().AbsPath(absPath...).Do().Raw()
+	iguazioTenantAppServicesSet, err := s.kubeClientSet.
+		Discovery().
+		RESTClient().
+		Get().
+		AbsPath(absPath...).
+		Do(ctx).
+		Raw()
 
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "Failed to get iguazio tenant app service sets")
