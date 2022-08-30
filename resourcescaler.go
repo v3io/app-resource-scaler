@@ -286,7 +286,11 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(ctx context.Context
 		"path":  "/status/state",
 		"value": string(provisioningState),
 	})
-
+	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
+		"op":    "add",
+		"path":  "/spec/spec/tenants/0/spec/force_apply_all_mode",
+		"value": "disabled",
+	})
 	if err := s.waitForNoProvisioningInProcess(ctx); err != nil {
 		return errors.Wrap(err, "Failed waiting for IguazioTenantAppServiceSet to finish provisioning")
 	}
