@@ -14,7 +14,7 @@
 #
 SCALER_TAG ?= unstable
 SCALER_REPOSITORY ?= iguazio/
-V3IO_SCALER_TAG ?= v0.4.4
+V3IO_SCALER_TAG ?= v0.4.5
 GOPATH ?= $(shell go env GOPATH)
 OS_NAME = $(shell uname)
 
