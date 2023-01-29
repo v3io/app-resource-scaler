@@ -17,23 +17,20 @@ illegal under applicable law, and the grant of the foregoing license
 under the Apache 2.0 license is conditioned upon your compliance with
 such restriction.
 */
-package main
+
+package resourcescaler
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/nuclio/errors"
 	"github.com/nuclio/logger"
-	"github.com/nuclio/zap"
-	"github.com/v3io/scaler-types"
+	"github.com/v3io/scaler/pkg/scalertypes"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 type ProvisioningState string
@@ -47,45 +44,34 @@ type AppResourceScaler struct {
 	logger        logger.Logger
 	namespace     string
 	kubeClientSet kubernetes.Interface
+
+	autoScalerOptions scalertypes.AutoScalerOptions
+	dlxOptions        scalertypes.DLXOptions
 }
 
-func New(kubeconfigPath string, namespace string) (scaler_types.ResourceScaler, error) { // nolint: deadcode
-	rLogger, err := nucliozap.NewNuclioZap("resourcescaler",
-		"console",
-		nil,
-		os.Stdout,
-		os.Stderr,
-		nucliozap.DebugLevel)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed creating a new logger")
-	}
-
-	kubeconfig, err := getClientConfig(kubeconfigPath)
-	if err != nil {
-		rLogger.WarnWith("Could not parse kubeconfig from path", "kubeconfigPath", kubeconfigPath)
-		return nil, errors.Wrap(err, "Failed parsing cluster's kubeconfig from path")
-	}
-
-	kubeClientSet, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed creating kubeclient from kubeconfig")
-	}
+func New(logger logger.Logger,
+	kubeClientSet kubernetes.Interface,
+	namespace string,
+	dlxOptions scalertypes.DLXOptions,
+	autoScalerOptions scalertypes.AutoScalerOptions) (scalertypes.ResourceScaler, error) { // nolint: deadcode
 
 	return &AppResourceScaler{
-		logger:        rLogger,
-		namespace:     namespace,
-		kubeClientSet: kubeClientSet,
+		logger:            logger.GetChild("resourcescaler"),
+		namespace:         namespace,
+		kubeClientSet:     kubeClientSet,
+		autoScalerOptions: autoScalerOptions,
+		dlxOptions:        dlxOptions,
 	}, nil
 }
 
 // SetScale scales a service
-// Deprecated, use  SetScaleCtx instead
-func (s *AppResourceScaler) SetScale(resources []scaler_types.Resource, scale int) error {
+// Deprecated: use SetScaleCtx instead
+func (s *AppResourceScaler) SetScale(resources []scalertypes.Resource, scale int) error {
 	return s.SetScaleCtx(context.Background(), resources, scale)
 }
 
 // SetScaleCtx scales a service
-func (s *AppResourceScaler) SetScaleCtx(ctx context.Context, resources []scaler_types.Resource, scale int) error {
+func (s *AppResourceScaler) SetScaleCtx(ctx context.Context, resources []scalertypes.Resource, scale int) error {
 	serviceNames := make([]string, 0)
 	for _, resource := range resources {
 		serviceNames = append(serviceNames, resource.Name)
@@ -96,8 +82,8 @@ func (s *AppResourceScaler) SetScaleCtx(ctx context.Context, resources []scaler_
 	return s.scaleServicesFromZero(ctx, s.namespace, serviceNames)
 }
 
-func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
-	resources := make([]scaler_types.Resource, 0)
+func (s *AppResourceScaler) GetResources() ([]scalertypes.Resource, error) {
+	resources := make([]scalertypes.Resource, 0)
 
 	specServicesMap, statusServicesMap, _, err := s.getIguazioTenantAppServiceSets(context.Background())
 	if err != nil {
@@ -139,7 +125,7 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 					return nil, errors.Wrap(err, "Failed to parse last scale event")
 				}
 
-				resources = append(resources, scaler_types.Resource{
+				resources = append(resources, scalertypes.Resource{
 					Name:               statusServiceName,
 					ScaleResources:     scaleResources,
 					LastScaleEvent:     lastScaleEvent,
@@ -156,11 +142,14 @@ func (s *AppResourceScaler) GetResources() ([]scaler_types.Resource, error) {
 	return resources, nil
 }
 
-func (s *AppResourceScaler) GetConfig() (*scaler_types.ResourceScalerConfig, error) {
-	return nil, nil
+func (s *AppResourceScaler) GetConfig() (*scalertypes.ResourceScalerConfig, error) {
+	return &scalertypes.ResourceScalerConfig{
+		AutoScalerOptions: s.autoScalerOptions,
+		DLXOptions:        s.dlxOptions,
+	}, nil
 }
 
-func (s *AppResourceScaler) ResolveServiceName(resource scaler_types.Resource) (string, error) {
+func (s *AppResourceScaler) ResolveServiceName(resource scalertypes.Resource) (string, error) {
 	return resource.Name, nil
 }
 
@@ -175,7 +164,7 @@ func (s *AppResourceScaler) scaleServicesFromZero(ctx context.Context, namespace
 		jsonPatchMapper, err = s.appendServiceStateChangeJSONPatchOperations(jsonPatchMapper,
 			serviceName,
 			"ready",
-			scaler_types.ScaleFromZeroStartedScaleEvent,
+			scalertypes.ScaleFromZeroStartedScaleEvent,
 			marshaledTime)
 		if err != nil {
 			return errors.Wrap(err, "Failed appending service state change json patch operations")
@@ -208,7 +197,7 @@ func (s *AppResourceScaler) scaleServicesToZero(ctx context.Context, namespace s
 		jsonPatchMapper, err = s.appendServiceStateChangeJSONPatchOperations(jsonPatchMapper,
 			serviceName,
 			"scaledToZero",
-			scaler_types.ScaleToZeroStartedScaleEvent,
+			scalertypes.ScaleToZeroStartedScaleEvent,
 			marshaledTime)
 		if err != nil {
 			return errors.Wrap(err, "Failed appending service state change json patch operations")
@@ -232,7 +221,7 @@ func (s *AppResourceScaler) scaleServicesToZero(ctx context.Context, namespace s
 func (s *AppResourceScaler) appendServiceStateChangeJSONPatchOperations(jsonPatchMapper []map[string]interface{},
 	serviceName string,
 	desiredState string,
-	scaleEvent scaler_types.ScaleEvent,
+	scaleEvent scalertypes.ScaleEvent,
 	marshaledTime []byte) ([]map[string]interface{}, error) {
 
 	desiredStatePath := fmt.Sprintf("/spec/spec/tenants/0/spec/services/%s/desired_state", serviceName)
@@ -318,7 +307,8 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(ctx context.Context
 func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) error {
 	s.logger.DebugWithCtx(ctx, "Waiting for IguazioTenantAppServiceSet to finish provisioning")
 	timeout := time.After(5 * time.Minute)
-	tick := time.Tick(10 * time.Second)
+	tick := time.NewTimer(10 * time.Second)
+	defer tick.Stop()
 	for {
 		_, _, state, err := s.getIguazioTenantAppServiceSets(ctx)
 		if err != nil {
@@ -337,7 +327,7 @@ func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) 
 			return errors.New("Context was cancelled")
 		case <-timeout:
 			return errors.New("Timed out waiting for IguazioTenantAppServiceSet to finish provisioning")
-		case <-tick:
+		case <-tick.C:
 			continue
 		}
 	}
@@ -349,14 +339,15 @@ func (s *AppResourceScaler) waitForServicesState(ctx context.Context, serviceNam
 		"serviceNames", serviceNames,
 		"desiredState", desiredState)
 	timeout := time.After(10 * time.Minute)
-	tick := time.Tick(5 * time.Second)
+	tick := time.NewTicker(5 * time.Second)
+	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return errors.New("Context was cancelled")
 		case <-timeout:
 			return errors.New("Timed out waiting for services to reach desired state")
-		case <-tick:
+		case <-tick.C:
 			servicesToCheck := append([]string(nil), serviceNames...)
 			_, statusServicesMap, _, err := s.getIguazioTenantAppServiceSets(ctx)
 			if err != nil {
@@ -394,14 +385,6 @@ func (s *AppResourceScaler) waitForServicesState(ctx context.Context, serviceNam
 			}
 		}
 	}
-}
-
-func getClientConfig(kubeconfigPath string) (*rest.Config, error) {
-	if kubeconfigPath != "" {
-		return clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-	}
-
-	return rest.InClusterConfig()
 }
 
 func (s *AppResourceScaler) getIguazioTenantAppServiceSets(ctx context.Context) (
@@ -497,13 +480,13 @@ func (s *AppResourceScaler) parseStatus(iguazioTenantAppServicesSetMap map[strin
 	return servicesMap, state, nil
 }
 
-func (s *AppResourceScaler) parseScaleToZeroStatus(scaleToZeroStatus map[string]interface{}) (scaler_types.ScaleEvent, time.Time, error) {
+func (s *AppResourceScaler) parseScaleToZeroStatus(scaleToZeroStatus map[string]interface{}) (scalertypes.ScaleEvent, time.Time, error) {
 	lastScaleEventString, ok := scaleToZeroStatus["last_scale_event"].(string)
 	if !ok {
 		return "", time.Now(), errors.New("Scale to zero status does not have last scale event")
 	}
 
-	lastScaleEvent, err := scaler_types.ParseScaleEvent(lastScaleEventString)
+	lastScaleEvent, err := scalertypes.ParseScaleEvent(lastScaleEventString)
 	if err != nil {
 		return "", time.Now(), errors.Wrap(err, "Failed to parse scale event")
 	}
@@ -521,7 +504,7 @@ func (s *AppResourceScaler) parseScaleToZeroStatus(scaleToZeroStatus map[string]
 	return lastScaleEvent, lastScaleEventTime, nil
 }
 
-func (s *AppResourceScaler) parseLastScaleEvent(serviceStatus interface{}) (*scaler_types.ScaleEvent, *time.Time, error) {
+func (s *AppResourceScaler) parseLastScaleEvent(serviceStatus interface{}) (*scalertypes.ScaleEvent, *time.Time, error) {
 	serviceStatusMap, ok := serviceStatus.(map[string]interface{})
 	if !ok {
 		return nil, nil, errors.New("Service status type assertion failed")
@@ -554,8 +537,8 @@ func (s *AppResourceScaler) parseServiceState(serviceStatus interface{}) (string
 	return stateString, nil
 }
 
-func (s *AppResourceScaler) parseScaleResources(serviceSpecInterface interface{}) ([]scaler_types.ScaleResource, error) {
-	var parsedScaleResources []scaler_types.ScaleResource
+func (s *AppResourceScaler) parseScaleResources(serviceSpecInterface interface{}) ([]scalertypes.ScaleResource, error) {
+	var parsedScaleResources []scalertypes.ScaleResource
 	serviceSpec, ok := serviceSpecInterface.(map[string]interface{})
 	if !ok {
 		return nil, errors.New("Service spec type assertion failed")
@@ -609,9 +592,9 @@ func (s *AppResourceScaler) parseScaleResources(serviceSpecInterface interface{}
 			return nil, errors.Wrap(err, "Failed to parse window size")
 		}
 
-		parsedScaleResource := scaler_types.ScaleResource{
+		parsedScaleResource := scalertypes.ScaleResource{
 			MetricName: metricName,
-			WindowSize: scaler_types.Duration{Duration: windowSize},
+			WindowSize: scalertypes.Duration{Duration: windowSize},
 			Threshold:  int(threshold),
 		}
 

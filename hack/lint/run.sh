@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Copyright 2019 Iguazio
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,35 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-name: CI
 
-on: [push, pull_request]
+set -e
 
-jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+OS_NAME=$(uname -s)
+OS_NAME_LOWERCASE=$(echo "${OS_NAME}" | tr "[:upper:]" "[:lower:]")
 
-      - uses: actions/setup-go@v3
-        with:
-          cache: true
-          go-version-file: "go.mod"
+if [[ -z "${BIN_DIR}" ]]; then
+  BIN_DIR=$(pwd)/.bin
+fi
 
-      - name: Lint
-        run: make lint
+echo Verifying imports...
 
-  build:
-    name: Build docker images
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+"${BIN_DIR}"/impi \
+  --local github.com/v3io/app-resource-scaler/ \
+  --scheme stdLocalThirdParty \
+  ./cmd/... ./pkg/...
 
-      - uses: actions/setup-go@v3
-        with:
-          cache: true
-          go-version-file: "go.mod"
-
-      - name: Build docker images
-        run: make build
+echo "Linting @$(pwd)..."
+"${BIN_DIR}"/golangci-lint run -v --max-same-issues=100
