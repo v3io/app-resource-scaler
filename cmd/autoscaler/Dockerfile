@@ -28,8 +28,12 @@ RUN go mod download
 
 COPY . .
 
-RUN GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-s -w" -o autoscaler cmd/autoscaler/main.go
+RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+    go build -a -installsuffix cgo -ldflags="-s -w" -o autoscaler cmd/autoscaler/main.go
 
 FROM gcr.io/iguazio/alpine:3.17
 
-COPY --from=builder /autoscaler/autoscaler /home/v3io/bin/autoscaler
+# copy autoscaler binary from build stage
+COPY --from=builder /autoscaler/autoscaler /usr/local/bin
+
+CMD [ "autoscaler" ]

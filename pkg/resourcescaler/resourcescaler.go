@@ -56,7 +56,7 @@ func New(logger logger.Logger,
 	autoScalerOptions scalertypes.AutoScalerOptions) (scalertypes.ResourceScaler, error) { // nolint: deadcode
 
 	return &AppResourceScaler{
-		logger:            logger.GetChild("resurcescaler"),
+		logger:            logger.GetChild("resourcescaler"),
 		namespace:         namespace,
 		kubeClientSet:     kubeClientSet,
 		autoScalerOptions: autoScalerOptions,

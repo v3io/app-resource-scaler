@@ -27,6 +27,11 @@ endif
 build: dlx autoscaler
 	@echo Done.
 
+.PHONY: push
+push:
+	docker push $(SCALER_REPOSITORY)dlx:$(SCALER_TAG)
+	docker push $(SCALER_REPOSITORY)autoscaler:$(SCALER_TAG)
+
 .PHONY: dlx
 dlx:
 	docker build \

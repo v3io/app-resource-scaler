@@ -45,7 +45,7 @@ func Run(kubeconfigPath string,
 	multiTargetStrategy string) error {
 
 	// create root logger
-	rootLogger, err := nucliozap.NewNuclioZap("dlx",
+	rootLogger, err := nucliozap.NewNuclioZap("app-resource-scaler",
 		"console",
 		nil,
 		os.Stdout,
