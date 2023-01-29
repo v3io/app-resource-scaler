@@ -38,13 +38,12 @@ jobs:
       - name: Set unstable
         if: github.event_name == 'push'
         run: |
-          echo "LABEL=unstable" >> $GITHUB_ENV
+          echo "SCALER_TAG=unstable" >> $GITHUB_ENV
 
       - name: Set release
         if: github.event_name == 'release'
         run: |
-          echo "LABEL=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
-          cat $GITHUB_ENV
+          echo "SCALER_TAG=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
 
       - uses: actions/checkout@v3
 
@@ -60,23 +59,19 @@ jobs:
       - name: Build image [GCR]
         run: make build
         env:
-          SCALER_TAG: ${{ env.LABEL }}
           SCALER_REPOSITORY: ${{ env.RELEASE_REGISTRY }}/${{ env.RELEASE_REPO }}
 
       - name: Push image [GCR]
         run: make push
         env:
-          SCALER_TAG: ${{ env.LABEL }}
           SCALER_REPOSITORY: ${{ env.RELEASE_REGISTRY }}/${{ env.RELEASE_REPO }}
 
       - name: Build image [Artifactory]
         run: make build
         env:
-          SCALER_TAG: ${{ env.LABEL }}
           SCALER_REPOSITORY: ${{ env.ARTIFACTORY_REGISTRY }}/${{ env.RELEASE_REPO }}
 
       - name: Push image [Artifactory]
         run: make push
         env:
-          SCALER_TAG: ${{ env.LABEL }}
           SCALER_REPOSITORY: ${{ env.ARTIFACTORY_REGISTRY }}/${{ env.RELEASE_REPO }}

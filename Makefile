@@ -14,7 +14,7 @@
 #
 
 SCALER_TAG ?= unstable
-SCALER_REPOSITORY ?= iguazio/
+SCALER_REPOSITORY ?= iguazio
 GOPATH ?= $(shell go env GOPATH)
 OS_NAME = $(shell uname)
 
@@ -29,21 +29,21 @@ build: dlx autoscaler
 
 .PHONY: push
 push:
-	docker push $(SCALER_REPOSITORY)dlx:$(SCALER_TAG)
-	docker push $(SCALER_REPOSITORY)autoscaler:$(SCALER_TAG)
+	docker push $(SCALER_REPOSITORY)/dlx:$(SCALER_TAG)
+	docker push $(SCALER_REPOSITORY)/autoscaler:$(SCALER_TAG)
 
 .PHONY: dlx
 dlx:
 	docker build \
 		--file cmd/dlx/Dockerfile \
-		--tag $(SCALER_REPOSITORY)dlx:$(SCALER_TAG) \
+		--tag $(SCALER_REPOSITORY)/dlx:$(SCALER_TAG) \
 		.
 
 .PHONY: autoscaler
 autoscaler:
 	docker build \
 		--file cmd/autoscaler/Dockerfile \
-		--tag $(SCALER_REPOSITORY)autoscaler:$(SCALER_TAG) \
+		--tag $(SCALER_REPOSITORY)/autoscaler:$(SCALER_TAG) \
 		.
 
 .PHONY: fmt
