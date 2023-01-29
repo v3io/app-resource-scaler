@@ -44,7 +44,7 @@ func Run(kubeconfigPath string,
 	metricsResourceGroup string) error {
 
 	// create root logger
-	rootLogger, err := nucliozap.NewNuclioZap("app",
+	rootLogger, err := nucliozap.NewNuclioZap("autoscaler",
 		"console",
 		nil,
 		os.Stdout,

@@ -26,10 +26,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/v3io/scaler/pkg/scalertypes"
-
 	"github.com/nuclio/errors"
 	"github.com/nuclio/logger"
+	"github.com/v3io/scaler/pkg/scalertypes"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
@@ -57,7 +56,7 @@ func New(logger logger.Logger,
 	autoScalerOptions scalertypes.AutoScalerOptions) (scalertypes.ResourceScaler, error) { // nolint: deadcode
 
 	return &AppResourceScaler{
-		logger:            logger.GetChild("appresourcescaler"),
+		logger:            logger.GetChild("resurcescaler"),
 		namespace:         namespace,
 		kubeClientSet:     kubeClientSet,
 		autoScalerOptions: autoScalerOptions,
