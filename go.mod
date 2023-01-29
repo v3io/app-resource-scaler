@@ -6,7 +6,7 @@ require (
 	github.com/nuclio/errors v0.0.4
 	github.com/nuclio/logger v0.0.1
 	github.com/nuclio/zap v0.1.2
-	github.com/v3io/scaler v0.5.3
+	github.com/v3io/scaler v0.5.4
 	k8s.io/apimachinery v0.23.16
 	k8s.io/client-go v0.23.16
 	k8s.io/metrics v0.23.16
