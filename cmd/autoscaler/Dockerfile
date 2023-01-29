@@ -12,35 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-name: CI
 
-on: [push, pull_request]
+FROM gcr.io/iguazio/golang:1.19-alpine3.17 AS builder
 
-jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+RUN apk --update --no-cache add \
+    git \
+    gcc \
+    musl-dev
 
-      - uses: actions/setup-go@v3
-        with:
-          cache: true
-          go-version-file: "go.mod"
+WORKDIR /autoscaler
 
-      - name: Lint
-        run: make lint
+COPY go.mod go.sum ./
 
-  build:
-    name: Build docker images
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+RUN go mod download
 
-      - uses: actions/setup-go@v3
-        with:
-          cache: true
-          go-version-file: "go.mod"
+COPY . .
 
-      - name: Build docker images
-        run: make build
+RUN GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-s -w" -o autoscaler cmd/autoscaler/main.go
+
+FROM gcr.io/iguazio/alpine:3.17
+
+COPY --from=builder /autoscaler/autoscaler /home/v3io/bin/autoscaler
