@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
 SCALER_TAG ?= unstable
 SCALER_REPOSITORY ?= iguazio/
 GOPATH ?= $(shell go env GOPATH)
@@ -29,14 +30,16 @@ build: dlx autoscaler
 .PHONY: dlx
 dlx:
 	docker build \
-		-f cmd/dlx/Dockerfile \
-		--tag=$(SCALER_REPOSITORY)dlx:$(SCALER_TAG) .
+		--file cmd/dlx/Dockerfile \
+		--tag $(SCALER_REPOSITORY)dlx:$(SCALER_TAG) \
+		.
 
 .PHONY: autoscaler
 autoscaler:
 	docker build \
-		-f cmd/autoscaler/Dockerfile \
-		--tag=$(SCALER_REPOSITORY)autoscaler:$(SCALER_TAG) .
+		--file cmd/autoscaler/Dockerfile \
+		--tag $(SCALER_REPOSITORY)autoscaler:$(SCALER_TAG) \
+		.
 
 .PHONY: fmt
 fmt:

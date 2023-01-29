@@ -15,3 +15,4 @@
 *.out
 
 .bin
+.github/.act
