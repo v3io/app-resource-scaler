@@ -307,7 +307,8 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(ctx context.Context
 func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) error {
 	s.logger.DebugWithCtx(ctx, "Waiting for IguazioTenantAppServiceSet to finish provisioning")
 	timeout := time.After(5 * time.Minute)
-	tick := time.Tick(10 * time.Second)
+	tick := time.NewTimer(10 * time.Second)
+	defer tick.Stop()
 	for {
 		_, _, state, err := s.getIguazioTenantAppServiceSets(ctx)
 		if err != nil {
@@ -326,7 +327,7 @@ func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) 
 			return errors.New("Context was cancelled")
 		case <-timeout:
 			return errors.New("Timed out waiting for IguazioTenantAppServiceSet to finish provisioning")
-		case <-tick:
+		case <-tick.C:
 			continue
 		}
 	}
@@ -338,14 +339,15 @@ func (s *AppResourceScaler) waitForServicesState(ctx context.Context, serviceNam
 		"serviceNames", serviceNames,
 		"desiredState", desiredState)
 	timeout := time.After(10 * time.Minute)
-	tick := time.Tick(5 * time.Second)
+	tick := time.NewTicker(5 * time.Second)
+	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return errors.New("Context was cancelled")
 		case <-timeout:
 			return errors.New("Timed out waiting for services to reach desired state")
-		case <-tick:
+		case <-tick.C:
 			servicesToCheck := append([]string(nil), serviceNames...)
 			_, statusServicesMap, _, err := s.getIguazioTenantAppServiceSets(ctx)
 			if err != nil {
