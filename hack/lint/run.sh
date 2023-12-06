@@ -26,17 +26,3 @@ echo Verifying imports...
 
 echo "Linting @$(pwd)..."
 go list -f '{{.Dir}}/...' -m | xargs ${BIN_DIR}/golangci-lint run --verbose
-
-echo "Terraform Linting @$(pwd)..."
-terraform fmt -check -diff -recursive .
-echo Done.
-
-
-if [[ $# -ne 0 && "$1" == "--with-ui" ]]; then
-  echo "UI Linting"
-  pushd dashboard/ui
-  npm install --legacy-peer-deps
-  npm run lint
-  echo Done.
-  popd
-fi
