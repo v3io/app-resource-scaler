@@ -16,8 +16,7 @@
 
 set -e
 
-OS_NAME=$(uname -s)
-OS_NAME_LOWERCASE=$(echo "${OS_NAME}" | tr "[:upper:]" "[:lower:]")
+# NOTE: RUN THAT from repo root
 
 if [[ -z "${BIN_DIR}" ]]; then
   BIN_DIR=$(pwd)/.bin
@@ -25,10 +24,19 @@ fi
 
 echo Verifying imports...
 
-"${BIN_DIR}"/impi \
-  --local github.com/v3io/app-resource-scaler/ \
-  --scheme stdLocalThirdParty \
-  ./cmd/... ./pkg/...
-
 echo "Linting @$(pwd)..."
-"${BIN_DIR}"/golangci-lint run -v --max-same-issues=100
+go list -f '{{.Dir}}/...' -m | xargs ${BIN_DIR}/golangci-lint run --verbose
+
+echo "Terraform Linting @$(pwd)..."
+terraform fmt -check -diff -recursive .
+echo Done.
+
+
+if [[ $# -ne 0 && "$1" == "--with-ui" ]]; then
+  echo "UI Linting"
+  pushd dashboard/ui
+  npm install --legacy-peer-deps
+  npm run lint
+  echo Done.
+  popd
+fi

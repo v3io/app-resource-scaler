@@ -49,6 +49,8 @@ autoscaler:
 .PHONY: fmt
 fmt:
 	gofmt -s -w .
+	./hack/lint/install.sh
+	.bin/golangci-lint run --fix
 
 .PHONY: lint
 lint: modules
