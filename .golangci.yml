@@ -32,6 +32,7 @@ linters:
     - structcheck
     - typecheck
     - gocritic
+    - gci
 
 run:
 
@@ -52,6 +53,15 @@ linters-settings:
   gocritic:
     disabled-checks:
       - commentFormatting # we dont want to enforce space before the comment text
+  gci:
+    sections:
+      - standard
+      - prefix(github.com/v3io/app-resource-scaler)
+      - default
+      - blank
+      - dot
+
+    custom-order: true
 
 issues:
 

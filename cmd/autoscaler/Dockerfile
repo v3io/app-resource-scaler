@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 
-FROM gcr.io/iguazio/golang:1.19-alpine3.17 AS builder
+FROM gcr.io/iguazio/golang:1.21-alpine3.18 AS builder
 
 RUN apk --update --no-cache add \
     git \
@@ -31,7 +31,7 @@ COPY . .
 RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
     go build -a -installsuffix cgo -ldflags="-s -w" -o autoscaler cmd/autoscaler/main.go
 
-FROM gcr.io/iguazio/alpine:3.17
+FROM gcr.io/iguazio/alpine:3.18
 
 # copy autoscaler binary from build stage
 COPY --from=builder /autoscaler/autoscaler /usr/local/bin
