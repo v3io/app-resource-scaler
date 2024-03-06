@@ -333,7 +333,7 @@ func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) 
 
 func (s *AppResourceScaler) waitForServicesState(ctx context.Context, serviceNames []string, desiredState string) error {
 	s.logger.DebugWithCtx(ctx,
-		"Waiting for services to reach desired state - Roei",
+		"Waiting for services to reach desired state",
 		"serviceNames", serviceNames,
 		"desiredState", desiredState)
 	for {
