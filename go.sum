@@ -116,6 +116,7 @@ github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcU
 github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
 github.com/v3io/scaler v0.6.0 h1:Gk2of3IZVZOg593r5myhUM3MGWb5o05TNZN6jwuvMkA=
 github.com/v3io/scaler v0.6.0/go.mod h1:ETpE7ghCUJEmXqgrhd3waQE5oJ50Uq0RO5QW8BuJvPo=
+github.com/v3io/scaler v0.7.0/go.mod h1:ETpE7ghCUJEmXqgrhd3waQE5oJ50Uq0RO5QW8BuJvPo=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 go.uber.org/goleak v1.2.0 h1:xqgm/S+aQvhWFTtR0XK3Jvg7z8kGV8P4X14IzwN3Eqk=
