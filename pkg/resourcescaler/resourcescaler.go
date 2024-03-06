@@ -67,7 +67,10 @@ func New(logger logger.Logger,
 // SetScale scales a service
 // Deprecated: use SetScaleCtx instead
 func (s *AppResourceScaler) SetScale(resources []scalertypes.Resource, scale int) error {
-	return s.SetScaleCtx(context.Background(), resources, scale)
+	setScaleContext, cancelFunc := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancelFunc()
+
+	return s.SetScaleCtx(setScaleContext, resources, scale)
 }
 
 // SetScaleCtx scales a service
@@ -306,30 +309,25 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(ctx context.Context
 
 func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) error {
 	s.logger.DebugWithCtx(ctx, "Waiting for IguazioTenantAppServiceSet to finish provisioning")
-	timeout := time.After(5 * time.Minute)
-	tick := time.NewTimer(10 * time.Second)
-	defer tick.Stop()
 	for {
-		_, _, state, err := s.getIguazioTenantAppServiceSets(ctx)
-		if err != nil {
-			return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
-		}
-
-		if state == "ready" || state == "error" {
-			s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet finished provisioning")
-			return nil
-		}
-
-		s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet is still provisioning", "state", state)
-
 		select {
 		case <-ctx.Done():
-			return errors.New("Context was cancelled")
-		case <-timeout:
-			return errors.New("Timed out waiting for IguazioTenantAppServiceSet to finish provisioning")
-		case <-tick.C:
-			continue
+			return ctx.Err()
+
+		case <-time.After(10 * time.Second):
+			_, _, state, err := s.getIguazioTenantAppServiceSets(ctx)
+			if err != nil {
+				return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
+			}
+
+			if state == "ready" || state == "error" {
+				s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet finished provisioning")
+				return nil
+			}
+
+			s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet is still provisioning", "state", state)
 		}
+
 	}
 }
 
@@ -338,16 +336,11 @@ func (s *AppResourceScaler) waitForServicesState(ctx context.Context, serviceNam
 		"Waiting for services to reach desired state",
 		"serviceNames", serviceNames,
 		"desiredState", desiredState)
-	timeout := time.After(10 * time.Minute)
-	tick := time.NewTicker(5 * time.Second)
-	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return errors.New("Context was cancelled")
-		case <-timeout:
-			return errors.New("Timed out waiting for services to reach desired state")
-		case <-tick.C:
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
 			servicesToCheck := append([]string(nil), serviceNames...)
 			_, statusServicesMap, _, err := s.getIguazioTenantAppServiceSets(ctx)
 			if err != nil {
