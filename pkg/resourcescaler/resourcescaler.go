@@ -322,18 +322,22 @@ func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) 
 			s.logger.DebugWithCtx(ctx, "Checking the state of the Iguazio tenant app service sets")
 			_, _, state, err := s.getIguazioTenantAppServiceSets(ctx)
 			if err != nil {
-				return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
+				s.logger.ErrorWithCtx(ctx, "Failed to get iguazio tenant app service sets")
+				continue
 			}
 
 			if state == "ready" || state == "error" {
 				if finiteStateDiscoveryTime == nil {
 					now := time.Now()
 					finiteStateDiscoveryTime = &now
-					s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet finished provisioning")
+					s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet finished provisioning", "state", state)
 				}
 			} else {
 
 				// reset the time if the state is not stable
+				if finiteStateDiscoveryTime != nil {
+					s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet is provisioning again, resetting discovery time", "state", state, "finiteStateDiscoveryTime", finiteStateDiscoveryTime)
+				}
 				finiteStateDiscoveryTime = nil
 			}
 
