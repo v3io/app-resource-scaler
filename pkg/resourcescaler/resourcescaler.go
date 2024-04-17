@@ -318,7 +318,8 @@ func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) 
 		case <-ctx.Done():
 			return ctx.Err()
 
-		case <-time.After(1 * time.Second):
+		case <-time.After(5 * time.Second):
+			s.logger.DebugWithCtx(ctx, "Checking the state of the Iguazio tenant app service sets")
 			_, _, state, err := s.getIguazioTenantAppServiceSets(ctx)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get iguazio tenant app service sets")
