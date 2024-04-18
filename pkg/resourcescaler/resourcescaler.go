@@ -308,22 +308,26 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(ctx context.Context
 }
 
 func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) error {
-	s.logger.DebugWithCtx(ctx, "Waiting for IguazioTenantAppServiceSet to finish provisioning")
+	s.logger.DebugWithCtx(ctx, "Ensuring IguazioTenantAppServiceSet is not provisioning")
 
-	finiteStateDiscoveryTimeout := 30 * time.Second
-
-	var finiteStateDiscoveryTime *time.Time
+	// as a start, wait 20 seconds for the state to be stable
+	// as we can naively assume the state has been stable for a while now.
+	finiteStateDiscoveryTimeout := 20 * time.Second
+	now := time.Now()
+	finiteStateDiscoveryTime := &now
 	for {
 		select {
 		case <-ctx.Done():
+			s.logger.DebugWithCtx(ctx, "Context done, returning")
 			return ctx.Err()
 
 		case <-time.After(5 * time.Second):
-			s.logger.DebugWithCtx(ctx, "Checking the state of the Iguazio tenant app service sets")
 			_, _, state, err := s.getIguazioTenantAppServiceSets(ctx)
 			if err != nil {
-				s.logger.WarnWithCtx(ctx, "Failed to get iguazio tenant app service sets",
-					"err", err.Error())
+				s.logger.WarnWithCtx(ctx,
+					"Failed to get iguazio tenant app service sets",
+					"err", errors.GetErrorStackString(err, 10),
+				)
 				continue
 			}
 
@@ -332,20 +336,27 @@ func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) 
 					now := time.Now()
 					finiteStateDiscoveryTime = &now
 					s.logger.DebugWithCtx(ctx,
-						"IguazioTenantAppServiceSet finished provisioning", "state", state)
+						"IguazioTenantAppServiceSet finished provisioning",
+						"state", state)
 				}
 			} else {
 
 				// reset the time if the state is not stable
 				if finiteStateDiscoveryTime != nil {
-					s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet is provisioning again, "+
-						"resetting discovery time",
+					s.logger.DebugWithCtx(ctx,
+						"IguazioTenantAppServiceSet is provisioning again, "+
+							"resetting discovery time",
 						"state", state,
 						"finiteStateDiscoveryTime", time.Since(*finiteStateDiscoveryTime).String())
 				}
 				finiteStateDiscoveryTime = nil
+
+				// if we have observed a transient state, we should increase the timeout
+				// to allow the waiters to observe the stable state for longer.
+				finiteStateDiscoveryTimeout = 30 * time.Second
 			}
 
+			// verify state stable for finiteStateDiscoveryTimeout amount of time
 			if finiteStateDiscoveryTime != nil {
 
 				// it has been finite for finiteStateDiscoveryTimeout amount of time
@@ -357,11 +368,13 @@ func (s *AppResourceScaler) waitForNoProvisioningInProcess(ctx context.Context) 
 					return nil
 
 				}
-				s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet waiting for the state to be stable",
+				s.logger.DebugWithCtx(ctx,
+					"IguazioTenantAppServiceSet waiting for the state to be stable",
 					"state", state,
 					"timeSince", timeSince.String())
 			} else {
-				s.logger.DebugWithCtx(ctx, "IguazioTenantAppServiceSet is still provisioning",
+				s.logger.DebugWithCtx(ctx,
+					"IguazioTenantAppServiceSet is still provisioning",
 					"state", state)
 			}
 		}
