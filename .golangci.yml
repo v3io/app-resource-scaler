@@ -12,27 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+version: 2
+
 linters:
-  disable-all: true
   enable:
-    - deadcode
+    - unused
     - goconst
-    - gofmt
-    - revive
-    - gosimple
     - ineffassign
     - misspell
     - staticcheck
     - unconvert
-    - varcheck
-    - vet
-    - vetshadow
     - errcheck
     - govet
-    - structcheck
-    - typecheck
     - gocritic
-    - gci
 
 run:
 
