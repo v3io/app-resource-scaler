@@ -29,7 +29,7 @@ import (
 
 	"github.com/nuclio/errors"
 	"github.com/nuclio/logger"
-	"github.com/nuclio/zap"
+	nucliozap "github.com/nuclio/zap"
 	"github.com/v3io/scaler/pkg/dlx"
 	"github.com/v3io/scaler/pkg/scalertypes"
 	"k8s.io/client-go/kubernetes"

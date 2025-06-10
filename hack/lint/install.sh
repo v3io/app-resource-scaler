@@ -21,17 +21,18 @@ echo Installing linters...
 OS_NAME=$(uname)
 FORCE_INSTALL=false
 BIN_DIR=$(pwd)/.bin/
+GOLANGCI_LINT_VERSION="v1.64.6"
 
 mkdir -p "${BIN_DIR}"
 
-if [[ $# -ne 0 && "$1" == "force" ]]
-  then
+if [[ $# -ne 0 && "$1" == "force" ]]; then
     echo "Force install golangci-lint requested"
     FORCE_INSTALL=true
 fi
 
-if [[ $FORCE_INSTALL = true || ! -f ${BIN_DIR}/golangci-lint ]] ; then
+if [[ "${FORCE_INSTALL}" == true || ! -f "${BIN_DIR}/golangci-lint" ]]; then
     echo "golangci-lint binary does not exist or force install requested. Fetching and installing..."
-    curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "${BIN_DIR}" v1.55.1
+    curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+        sh -s -- -b "${BIN_DIR}" "${GOLANGCI_LINT_VERSION}"
     echo "golangci-lint installed in: ${BIN_DIR}/golangci-lint"
 fi
