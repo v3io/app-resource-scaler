@@ -1,6 +1,6 @@
 module github.com/v3io/app-resource-scaler
 
-go 1.23.8
+go 1.23.12
 
 require (
 	github.com/nuclio/errors v0.0.4
