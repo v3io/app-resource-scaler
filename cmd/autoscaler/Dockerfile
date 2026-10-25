@@ -31,7 +31,9 @@ COPY . .
 RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
     go build -a -installsuffix cgo -ldflags="-s -w" -o autoscaler cmd/autoscaler/main.go
 
-FROM gcr.io/iguazio/alpine:3.18
+FROM gcr.io/iguazio/alpine:3.23
+
+RUN apk upgrade --no-cache
 
 # copy autoscaler binary from build stage
 COPY --from=builder /autoscaler/autoscaler /usr/local/bin
