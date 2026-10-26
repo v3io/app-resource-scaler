@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 
-FROM gcr.io/iguazio/golang:1.23-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 RUN apk --update --no-cache add \
     git \
@@ -31,7 +31,9 @@ COPY . .
 RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
     go build -a -installsuffix cgo -ldflags="-s -w" -o dlx cmd/dlx/main.go
 
-FROM gcr.io/iguazio/alpine:3.18
+FROM alpine:3.23
+
+RUN apk upgrade --no-cache
 
 # copy dlx binary from build stage
 COPY --from=builder /dlx/dlx /usr/local/bin

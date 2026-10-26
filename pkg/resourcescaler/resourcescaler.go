@@ -40,6 +40,13 @@ const (
 	scaleToZeroProvisioningState   ProvisioningState = "waitingForScalingToZero"
 )
 
+const (
+	jsonPatchOp    = "op"
+	jsonPatchPath  = "path"
+	jsonPatchValue = "value"
+	jsonPatchOpAdd = "add"
+)
+
 type AppResourceScaler struct {
 	logger        logger.Logger
 	namespace     string
@@ -65,6 +72,7 @@ func New(logger logger.Logger,
 }
 
 // SetScale scales a service
+//
 // Deprecated: use SetScaleCtx instead
 func (s *AppResourceScaler) SetScale(resources []scalertypes.Resource, scale int) error {
 	setScaleContext, cancelFunc := context.WithTimeout(context.Background(), 15*time.Minute)
@@ -236,34 +244,34 @@ func (s *AppResourceScaler) appendServiceStateChangeJSONPatchOperations(jsonPatc
 	lastScaleStatePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event", serviceName)
 	lastScaleStateTimePath := fmt.Sprintf("/status/services/%s/scale_to_zero/last_scale_event_time", serviceName)
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-		"op":    "add",
-		"path":  desiredStatePath,
-		"value": desiredState,
+		jsonPatchOp:    jsonPatchOpAdd,
+		jsonPatchPath:  desiredStatePath,
+		jsonPatchValue: desiredState,
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-		"op":    "add",
-		"path":  markForRestartPath,
-		"value": false,
+		jsonPatchOp:    jsonPatchOpAdd,
+		jsonPatchPath:  markForRestartPath,
+		jsonPatchValue: false,
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-		"op":    "add",
-		"path":  markAsChangedPath,
-		"value": true,
+		jsonPatchOp:    jsonPatchOpAdd,
+		jsonPatchPath:  markAsChangedPath,
+		jsonPatchValue: true,
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-		"op":    "add",
-		"path":  scaleToZeroStatusPath,
-		"value": map[string]interface{}{},
+		jsonPatchOp:    jsonPatchOpAdd,
+		jsonPatchPath:  scaleToZeroStatusPath,
+		jsonPatchValue: map[string]interface{}{},
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-		"op":    "add",
-		"path":  lastScaleStatePath,
-		"value": string(scaleEvent),
+		jsonPatchOp:    jsonPatchOpAdd,
+		jsonPatchPath:  lastScaleStatePath,
+		jsonPatchValue: string(scaleEvent),
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-		"op":    "add",
-		"path":  lastScaleStateTimePath,
-		"value": string(marshaledTime),
+		jsonPatchOp:    jsonPatchOpAdd,
+		jsonPatchPath:  lastScaleStateTimePath,
+		jsonPatchValue: string(marshaledTime),
 	})
 
 	return jsonPatchMapper, nil
@@ -274,14 +282,14 @@ func (s *AppResourceScaler) patchIguazioTenantAppServiceSets(ctx context.Context
 	jsonPatchMapper []map[string]interface{},
 	provisioningState ProvisioningState) error {
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-		"op":    "add",
-		"path":  "/status/state",
-		"value": string(provisioningState),
+		jsonPatchOp:    jsonPatchOpAdd,
+		jsonPatchPath:  "/status/state",
+		jsonPatchValue: string(provisioningState),
 	})
 	jsonPatchMapper = append(jsonPatchMapper, map[string]interface{}{
-		"op":    "add",
-		"path":  "/spec/spec/tenants/0/spec/force_apply_all_mode",
-		"value": "disabled",
+		jsonPatchOp:    jsonPatchOpAdd,
+		jsonPatchPath:  "/spec/spec/tenants/0/spec/force_apply_all_mode",
+		jsonPatchValue: "disabled",
 	})
 	if err := s.waitForNoProvisioningInProcess(ctx); err != nil {
 		return errors.Wrap(err, "Failed waiting for IguazioTenantAppServiceSet to finish provisioning")
